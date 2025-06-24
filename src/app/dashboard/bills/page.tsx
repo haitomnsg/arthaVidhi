@@ -64,8 +64,8 @@ export default function AllBillsPage() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>All Bills</CardTitle>
-            <CardDescription>Manage your bills and invoices.</CardDescription>
+            <CardTitle>Find Bill</CardTitle>
+            <CardDescription>Search and manage your bills.</CardDescription>
           </div>
           <Button asChild>
             <Link href="/dashboard/bills/create">
