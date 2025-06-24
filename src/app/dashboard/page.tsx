@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CircleDollarSign, Download, Eye, FileText, PlusCircle } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,35 +55,35 @@ const stats = [
 const recentBills = [
   {
     invoice: "INV005",
-    client: { name: "Ava Jones", email: "ava@example.com", avatar: "https://i.pravatar.cc/150?u=ava" },
+    client: { name: "Ava Jones", email: "ava@example.com" },
     amount: "Rs. 550.00",
     status: "Paid",
     date: "2023-10-29",
   },
   {
     invoice: "INV004",
-    client: { name: "Emma Brown", email: "emma@example.com", avatar: "https://i.pravatar.cc/150?u=emma" },
+    client: { name: "Emma Brown", email: "emma@example.com" },
     amount: "Rs. 450.00",
     status: "Overdue",
     date: "2023-10-28",
   },
   {
     invoice: "INV003",
-    client: { name: "Noah Williams", email: "noah@example.com", avatar: "https://i.pravatar.cc/150?u=noah" },
+    client: { name: "Noah Williams", email: "noah@example.com" },
     amount: "Rs. 350.00",
     status: "Paid",
     date: "2023-10-27",
   },
   {
     invoice: "INV002",
-    client: { name: "Olivia Smith", email: "olivia@example.com", avatar: "https://i.pravatar.cc/150?u=olivia" },
+    client: { name: "Olivia Smith", email: "olivia@example.com" },
     amount: "Rs. 150.00",
     status: "Pending",
     date: "2023-10-26",
   },
   {
     invoice: "INV001",
-    client: { name: "Liam Johnson", email: "liam@example.com", avatar: "https://i.pravatar.cc/150?u=liam" },
+    client: { name: "Liam Johnson", email: "liam@example.com" },
     amount: "Rs. 250.00",
     status: "Paid",
     date: "2023-10-25",
@@ -134,7 +133,7 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">SN. NO.</TableHead>
+                  <TableHead className="w-[80px]">SN. NO.</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-center">Status</TableHead>
@@ -147,15 +146,9 @@ export default function DashboardPage() {
                   <TableRow key={bill.invoice}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={bill.client.avatar} alt="Avatar" />
-                          <AvatarFallback>{bill.client.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="grid gap-0.5">
-                          <p className="font-medium">{bill.client.name}</p>
-                          <p className="text-xs text-muted-foreground">{bill.client.email}</p>
-                        </div>
+                      <div className="grid gap-0.5">
+                        <p className="font-medium">{bill.client.name}</p>
+                        <p className="text-xs text-muted-foreground">{bill.client.email}</p>
                       </div>
                     </TableCell>
                     <TableCell>{bill.date}</TableCell>
