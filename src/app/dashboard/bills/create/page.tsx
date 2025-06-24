@@ -234,8 +234,8 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
               <tr key={index} className="border-b">
                 <td className="p-3">{item.description}</td>
                 <td className="p-3 text-center">{item.quantity}</td>
-                <td className="p-3 text-right">Rs. {item.rate?.toFixed(2)}</td>
-                <td className="p-3 text-right">Rs. {(item.quantity * item.rate).toFixed(2)}</td>
+                <td className="p-3 text-right">Rs. {Number(item.rate || 0).toFixed(2)}</td>
+                <td className="p-3 text-right">Rs. {(Number(item.quantity || 0) * Number(item.rate || 0)).toFixed(2)}</td>
               </tr>
             )) : (
               <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Add items to see them here.</td></tr>
