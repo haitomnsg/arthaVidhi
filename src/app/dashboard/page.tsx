@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, FileText, PlusCircle, Users } from "lucide-react";
+import { CircleDollarSign, FileText, PlusCircle } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,12 @@ import {
 
 const stats = [
   {
+    title: "Total Revenue",
+    amount: "Rs. 4,20,500",
+    change: "+15.2% from last month",
+    icon: <CircleDollarSign className="h-5 w-5 text-muted-foreground" />,
+  },
+  {
     title: "Total Bills",
     amount: "2,453",
     change: "+20 from last month",
@@ -29,21 +35,15 @@ const stats = [
   },
   {
     title: "Bills Paid",
-    amount: "+2350",
-    change: "+180.1% from last month",
+    amount: "2,350",
+    change: "+180 from last month",
     icon: <FileText className="h-5 w-5 text-muted-foreground" />,
   },
   {
     title: "Bills Due",
     amount: "12",
-    change: "+19% from last month",
+    change: "+2 from last month",
     icon: <FileText className="h-5 w-5 text-muted-foreground text-destructive" />,
-  },
-  {
-    title: "Total Users",
-    amount: "+573",
-    change: "+201 since last month",
-    icon: <Users className="h-5 w-5 text-muted-foreground" />,
   },
 ];
 
