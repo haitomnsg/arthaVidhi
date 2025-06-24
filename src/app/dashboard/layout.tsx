@@ -58,7 +58,7 @@ export default function DashboardLayout({
             <Logo />
           </div>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="p-2">
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
