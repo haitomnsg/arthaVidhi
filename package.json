@@ -10,8 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "postinstall": "prisma generate",
-    "db:check": "tsx scripts/check-db.ts"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.8.0",
