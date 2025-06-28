@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  phone     String
+  password  String // Remember to hash this!
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  company   Company?  @relation(fields: [companyId], references: [id])
+  companyId String?
+  bills     Bill[]
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  pan       String?
+  vat       String?
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Bill {
+  id              String     @id @default(cuid())
+  invoiceNumber   String     @unique
+  clientName      String
+  clientAddress   String
+  clientPhone     String
+  clientPan       String?
+  billDate        DateTime
+  dueDate         DateTime
+  subtotal        Float
+  discount        Float      @default(0)
+  vat             Float
+  total           Float
+  status          String     // e.g., "Paid", "Pending", "Overdue"
+  items           BillItem[]
+  createdBy       User       @relation(fields: [createdById], references: [id])
+  createdById     String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model BillItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float
+  unit        String
+  rate        Float
+  amount      Float
+  bill        Bill     @relation(fields: [billId], references: [id])
+  billId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
