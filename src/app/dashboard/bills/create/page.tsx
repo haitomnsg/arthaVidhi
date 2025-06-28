@@ -1,17 +1,19 @@
 
 "use client";
 
-import { useTransition } from "react";
+import React, { useTransition, useState, useEffect, useMemo, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
 import {
   CalendarIcon,
   PlusCircle,
-  Printer,
+  Download,
   X,
 } from "lucide-react";
 import { format } from "date-fns";
+import type { Company } from '@prisma/client';
+import { PDFDownloadLink, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
 import { createBill } from "@/app/actions/bills";
+import { getCompanyDetails } from "@/app/actions/company";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -64,9 +67,26 @@ const billFormSchema = z.object({
 
 type BillFormValues = z.infer<typeof billFormSchema>;
 
+interface PDFData {
+    bill: BillFormValues;
+    company: Partial<Company>;
+    subtotal: number;
+    discount: number;
+    vat: number;
+    total: number;
+    invoiceNumber: string;
+}
+
 export default function CreateBillPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [companyDetails, setCompanyDetails] = useState<Partial<Company>>({});
+  const [pdfData, setPdfData] = useState<PDFData | null>(null);
+  const downloadLinkRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    getCompanyDetails().then(setCompanyDetails);
+  }, []);
 
   const form = useForm<BillFormValues>({
     resolver: zodResolver(billFormSchema),
@@ -87,6 +107,25 @@ export default function CreateBillPage() {
     name: "items",
   });
 
+  const watchedItems = form.watch("items");
+  const discountValue = form.watch("discount");
+
+  const subtotal = useMemo(() => {
+    return watchedItems.reduce((acc, item) => {
+      const quantity = parseFloat(String(item.quantity)) || 0;
+      const rate = parseFloat(String(item.rate)) || 0;
+      return acc + quantity * rate;
+    }, 0);
+  }, [watchedItems]);
+
+  const discount = useMemo(() => {
+    return parseFloat(String(discountValue)) || 0;
+  }, [discountValue]);
+  
+  const subtotalAfterDiscount = subtotal - discount;
+  const vat = subtotalAfterDiscount * 0.13;
+  const total = subtotalAfterDiscount + vat;
+
   const onSubmit = (values: BillFormValues) => {
     startTransition(() => {
         createBill(values).then((data) => {
@@ -97,38 +136,40 @@ export default function CreateBillPage() {
                     variant: "destructive",
                 });
             }
-            if (data.success) {
+            if (data.success && data.bill) {
                 toast({
                     title: "Bill Created",
-                    description: data.success,
+                    description: "Your PDF will download automatically.",
                 });
-                setTimeout(() => window.print(), 500);
+                setPdfData({
+                    bill: values,
+                    company: companyDetails,
+                    subtotal,
+                    discount,
+                    vat,
+                    total,
+                    invoiceNumber: data.bill.invoiceNumber,
+                });
             }
         });
     });
   };
 
-  const watchedItems = form.watch("items");
-  const discountValue = form.watch("discount");
-  const discount = Number.isFinite(discountValue) ? discountValue : 0;
-  
-  const subtotal = watchedItems.reduce(
-    (acc, item) => {
-        const quantity = Number.isFinite(item.quantity) ? item.quantity : 0;
-        const rate = Number.isFinite(item.rate) ? item.rate : 0;
-        return acc + quantity * rate;
-    },
-    0
-  );
-  const subtotalAfterDiscount = subtotal - discount;
-  const vat = subtotalAfterDiscount * 0.13;
-  const total = subtotalAfterDiscount + vat;
+  useEffect(() => {
+    if (pdfData && downloadLinkRef.current) {
+      const timer = setTimeout(() => {
+        downloadLinkRef.current?.click();
+        setPdfData(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [pdfData]);
 
   const billData = form.watch();
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="min-w-0">
           <Card>
             <CardHeader>
@@ -209,7 +250,7 @@ export default function CreateBillPage() {
             </CardContent>
              <CardFooter>
                <Button type="submit" form="bill-form" disabled={isPending || !form.formState.isValid} size="lg">
-                 {isPending ? "Saving..." : <><Printer className="mr-2 h-4 w-4" /> Create Bill & Print</>}
+                 {isPending ? "Saving..." : <><Download className="mr-2 h-4 w-4" /> Create Bill & Download</>}
                </Button>
              </CardFooter>
           </Card>
@@ -220,19 +261,27 @@ export default function CreateBillPage() {
               <CardTitle>Bill Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <BillPreview bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
+              <BillPreview company={companyDetails} bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
             </CardContent>
           </Card>
         </div>
       </div>
-      <div className="hidden print:block">
-        <BillPreview bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
-      </div>
+      {pdfData && (
+        <PDFDownloadLink
+            document={<BillPDFDocument {...pdfData} />}
+            fileName={`${pdfData.invoiceNumber}.pdf`}
+            ref={downloadLinkRef}
+            style={{ display: "none" }}
+        >
+            {({loading}) => (loading ? 'Loading...' : 'Download')}
+        </PDFDownloadLink>
+      )}
     </>
   );
 }
 
 interface BillPreviewProps {
+    company: Partial<Company>;
     bill: Partial<BillFormValues>;
     subtotal: number;
     discount: number;
@@ -240,7 +289,7 @@ interface BillPreviewProps {
     total: number;
 }
 
-function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps) {
+function BillPreview({ company, bill, subtotal, discount, vat, total }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
   const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
   return (
@@ -248,11 +297,22 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
        <header className="flex justify-between items-start mb-8">
         <div>
           <Logo />
-          <p className="text-muted-foreground text-sm mt-2">Haitomns Groups</p>
+          <p className="font-bold text-lg mt-4">{company?.name || "Your Company"}</p>
+          <p className="text-muted-foreground text-sm">{company?.address}</p>
+          <p className="text-muted-foreground text-sm">
+            {company?.phone && `Phone: ${company.phone}`}
+            {company?.email && company?.phone && " | "}
+            {company?.email && `Email: ${company.email}`}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {company?.panNumber && `PAN: ${company.panNumber}`}
+            {company?.vatNumber && company?.panNumber && " | "}
+            {company?.vatNumber && `VAT: ${company.vatNumber}`}
+          </p>
         </div>
         <div className="text-right">
           <h2 className="text-3xl font-bold uppercase text-primary">Invoice</h2>
-          <p className="text-muted-foreground">#INV-0024</p>
+          <p className="text-muted-foreground">#INV-PREVIEW</p>
         </div>
        </header>
        <div className="grid grid-cols-2 gap-8 mb-8">
@@ -286,8 +346,8 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
                 <td className="p-3">{item.description}</td>
                 <td className="p-3 text-center">{item.quantity}</td>
                 <td className="p-3 text-center">{item.unit}</td>
-                <td className="p-3 text-right">Rs. {Number(item.rate || 0).toFixed(2)}</td>
-                <td className="p-3 text-right">Rs. {(Number(item.quantity || 0) * Number(item.rate || 0)).toFixed(2)}</td>
+                <td className="p-3 text-right">Rs. {(Number(item.rate) || 0).toFixed(2)}</td>
+                <td className="p-3 text-right">Rs. {((Number(item.quantity) || 0) * (Number(item.rate) || 0)).toFixed(2)}</td>
               </tr>
             )) : (
               <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Add items to see them here.</td></tr>
@@ -315,3 +375,254 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
     </div>
   )
 }
+
+const pdfStyles = StyleSheet.create({
+  page: {
+    fontFamily: 'Helvetica',
+    fontSize: 11,
+    padding: 30,
+    flexDirection: 'column',
+    backgroundColor: '#FFFFFF'
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FF8703',
+  },
+  companyDetails: {
+    flexDirection: 'column',
+  },
+  companyName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF8703',
+  },
+  companyInfo: {
+    fontSize: 10,
+    color: '#4A4A4A'
+  },
+  invoiceTitleSection: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  invoiceTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF8703',
+  },
+  invoiceNumber: {
+    fontSize: 10,
+    color: '#4A4A4A',
+  },
+  billDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+  },
+  billTo: {
+    flexDirection: 'column',
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#333'
+  },
+  clientName: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  clientInfo: {
+    fontSize: 10,
+    color: '#4A4A4A',
+  },
+  dates: {
+    flexDirection: 'column',
+    alignItems: 'flex-end'
+  },
+  dateText: {
+    fontSize: 10,
+  },
+  table: {
+    display: "flex",
+    width: "auto",
+    borderStyle: "solid",
+    borderWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0
+  },
+  tableRow: {
+    margin: "auto",
+    flexDirection: "row"
+  },
+  tableHeader: {
+    backgroundColor: '#F2E0D1',
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: '#F2E0D1',
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  tableColHeader: {
+    width: '20%',
+    padding: 5,
+    fontWeight: 'bold',
+    fontSize: 10,
+  },
+  tableColHeaderDesc: {
+    width: '40%',
+    padding: 5,
+    fontWeight: 'bold',
+    fontSize: 10,
+  },
+  tableCell: {
+    padding: 5,
+    fontSize: 10,
+  },
+  tableCellDesc: {
+    width: '40%',
+  },
+  tableCellOther: {
+    width: '20%',
+    textAlign: 'right'
+  },
+  tableBodyRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE'
+  },
+  summary: {
+    marginTop: 30,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  summaryContainer: {
+    width: '40%',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  summaryLabel: {
+    fontSize: 10,
+    color: '#4A4A4A',
+  },
+  summaryValue: {
+    fontSize: 10,
+    textAlign: 'right',
+  },
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    marginTop: 5,
+  },
+  summaryTotalLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FF8703'
+  },
+  summaryTotalValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FF8703',
+    textAlign: 'right',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    right: 30,
+    textAlign: 'center',
+    fontSize: 9,
+    color: '#888888',
+  }
+});
+
+
+const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoiceNumber }: PDFData) => {
+    const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
+    const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
+
+    return (
+        <Document>
+            <Page size="A4" style={pdfStyles.page}>
+                <View style={pdfStyles.header}>
+                    <View style={pdfStyles.companyDetails}>
+                        <Text style={pdfStyles.companyName}>{company.name}</Text>
+                        <Text style={pdfStyles.companyInfo}>{company.address}</Text>
+                        <Text style={pdfStyles.companyInfo}>Phone: {company.phone} | Email: {company.email}</Text>
+                        <Text style={pdfStyles.companyInfo}>PAN: {company.panNumber} | VAT: {company.vatNumber}</Text>
+                    </View>
+                    <View style={pdfStyles.invoiceTitleSection}>
+                        <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
+                        <Text style={pdfStyles.invoiceNumber}>#{invoiceNumber}</Text>
+                    </View>
+                </View>
+
+                <View style={pdfStyles.billDetails}>
+                    <View style={pdfStyles.billTo}>
+                        <Text style={pdfStyles.sectionTitle}>Bill To:</Text>
+                        <Text style={pdfStyles.clientName}>{bill.clientName}</Text>
+                        <Text style={pdfStyles.clientInfo}>{bill.clientAddress}</Text>
+                        <Text style={pdfStyles.clientInfo}>{bill.clientPhone}</Text>
+                        {bill.panNumber && <Text style={pdfStyles.clientInfo}>PAN: {bill.panNumber}</Text>}
+                    </View>
+                    <View style={pdfStyles.dates}>
+                        <Text style={pdfStyles.dateText}>Bill Date: {formattedDate}</Text>
+                        <Text style={pdfStyles.dateText}>Due Date: {formattedDueDate}</Text>
+                    </View>
+                </View>
+
+                <View style={pdfStyles.table}>
+                    <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
+                        <Text style={pdfStyles.tableColHeaderDesc}>Description</Text>
+                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Quantity</Text>
+                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Rate (Rs.)</Text>
+                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Amount (Rs.)</Text>
+                    </View>
+                    {bill.items.map((item, index) => (
+                        <View key={index} style={[pdfStyles.tableRow, pdfStyles.tableBodyRow]}>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellDesc]}>{item.description}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellOther]}>{item.quantity} {item.unit}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellOther]}>{(Number(item.rate) || 0).toFixed(2)}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellOther]}>{((Number(item.quantity) || 0) * (Number(item.rate) || 0)).toFixed(2)}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                <View style={pdfStyles.summary}>
+                    <View style={pdfStyles.summaryContainer}>
+                        <View style={pdfStyles.summaryRow}>
+                            <Text style={pdfStyles.summaryLabel}>Subtotal</Text>
+                            <Text style={pdfStyles.summaryValue}>Rs. {subtotal.toFixed(2)}</Text>
+                        </View>
+                        <View style={pdfStyles.summaryRow}>
+                            <Text style={pdfStyles.summaryLabel}>Discount</Text>
+                            <Text style={pdfStyles.summaryValue}>- Rs. {discount.toFixed(2)}</Text>
+                        </View>
+                        <View style={pdfStyles.summaryRow}>
+                            <Text style={pdfStyles.summaryLabel}>Subtotal after Discount</Text>
+                            <Text style={pdfStyles.summaryValue}>Rs. {(subtotal - discount).toFixed(2)}</Text>
+                        </View>
+                        <View style={pdfStyles.summaryRow}>
+                            <Text style={pdfStyles.summaryLabel}>VAT (13%)</Text>
+                            <Text style={pdfStyles.summaryValue}>Rs. {vat.toFixed(2)}</Text>
+                        </View>
+                        <View style={pdfStyles.summaryTotalRow}>
+                            <Text style={pdfStyles.summaryTotalLabel}>Total</Text>
+                            <Text style={pdfStyles.summaryTotalValue}>Rs. {total.toFixed(2)}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                <Text style={pdfStyles.footer}>Thank you for your business! | ArthaVidhi by Haitomns Groups</Text>
+            </Page>
+        </Document>
+    )
+};
