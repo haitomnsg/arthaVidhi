@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -25,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
+import { loginUser } from "./actions/auth";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -34,6 +36,7 @@ const formSchema = z.object({
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,12 +47,24 @@ export default function LoginPage() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // Mock login logic
-    toast({
-      title: "Login Successful",
-      description: "Welcome back!",
+    startTransition(() => {
+      loginUser(values).then((data) => {
+        if (data?.error) {
+          toast({
+            title: "Login Failed",
+            description: data.error,
+            variant: "destructive",
+          });
+        }
+        if (data?.success) {
+          toast({
+            title: "Login Successful",
+            description: "Welcome back!",
+          });
+          router.push("/dashboard");
+        }
+      });
     });
-    router.push("/dashboard");
   }
 
   return (
@@ -78,6 +93,7 @@ export default function LoginPage() {
                         type="email"
                         placeholder="you@example.com"
                         {...field}
+                        disabled={isPending}
                       />
                     </FormControl>
                     <FormMessage />
@@ -91,14 +107,14 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isPending}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full text-lg h-12">
-                Log In
+              <Button type="submit" className="w-full text-lg h-12" disabled={isPending}>
+                {isPending ? "Logging In..." : "Log In"}
               </Button>
             </form>
           </Form>

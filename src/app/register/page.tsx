@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -25,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
+import { registerUser } from "../actions/auth";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -38,6 +40,7 @@ const formSchema = z.object({
 export default function RegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -50,12 +53,24 @@ export default function RegisterPage() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // Mock registration logic
-    toast({
-      title: "Registration Successful",
-      description: "You can now log in with your credentials.",
+    startTransition(() => {
+      registerUser(values).then((data) => {
+        if (data.error) {
+          toast({
+            title: "Registration Failed",
+            description: data.error,
+            variant: "destructive",
+          });
+        }
+        if (data.success) {
+          toast({
+            title: "Registration Successful",
+            description: "You can now log in with your credentials.",
+          });
+          router.push("/");
+        }
+      });
     });
-    router.push("/");
   }
 
   return (
@@ -80,7 +95,7 @@ export default function RegisterPage() {
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="John Doe" {...field} />
+                      <Input placeholder="John Doe" {...field} disabled={isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -93,7 +108,7 @@ export default function RegisterPage() {
                   <FormItem>
                     <FormLabel>Phone Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="98XXXXXXXX" {...field} />
+                      <Input placeholder="98XXXXXXXX" {...field} disabled={isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -110,6 +125,7 @@ export default function RegisterPage() {
                         type="email"
                         placeholder="you@example.com"
                         {...field}
+                        disabled={isPending}
                       />
                     </FormControl>
                     <FormMessage />
@@ -123,14 +139,14 @@ export default function RegisterPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full text-lg h-12">
-                Register
+              <Button type="submit" className="w-full text-lg h-12" disabled={isPending}>
+                {isPending ? "Registering..." : "Register"}
               </Button>
             </form>
           </Form>
