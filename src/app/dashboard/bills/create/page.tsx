@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
@@ -41,6 +42,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
+import { createBill } from "@/app/actions/bills";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -64,6 +66,8 @@ type BillFormValues = z.infer<typeof billFormSchema>;
 
 export default function CreateBillPage() {
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
+
   const form = useForm<BillFormValues>({
     resolver: zodResolver(billFormSchema),
     defaultValues: {
@@ -83,6 +87,27 @@ export default function CreateBillPage() {
     name: "items",
   });
 
+  const onSubmit = (values: BillFormValues) => {
+    startTransition(() => {
+        createBill(values).then((data) => {
+            if (data.error) {
+                toast({
+                    title: "Error",
+                    description: data.error,
+                    variant: "destructive",
+                });
+            }
+            if (data.success) {
+                toast({
+                    title: "Bill Created",
+                    description: data.success,
+                });
+                setTimeout(() => window.print(), 500);
+            }
+        });
+    });
+  };
+
   const watchedItems = form.watch("items");
   const watchedDiscount = form.watch("discount") || 0;
   
@@ -93,14 +118,6 @@ export default function CreateBillPage() {
   const subtotalAfterDiscount = subtotal - watchedDiscount;
   const vat = subtotalAfterDiscount * 0.13;
   const total = subtotalAfterDiscount + vat;
-
-  const handlePrint = () => {
-    toast({
-      title: "Generating PDF...",
-      description: "Your bill is being prepared for printing.",
-    });
-    setTimeout(() => window.print(), 500);
-  };
 
   const billData = form.watch();
 
@@ -117,7 +134,7 @@ export default function CreateBillPage() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form id="bill-form" className="space-y-8">
+                <form onSubmit={form.handleSubmit(onSubmit)} id="bill-form" className="space-y-8">
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium">Client Details</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -186,7 +203,9 @@ export default function CreateBillPage() {
               </Form>
             </CardContent>
              <CardFooter>
-               <Button onClick={handlePrint} disabled={!form.formState.isValid} size="lg"><Printer className="mr-2 h-4 w-4" /> Create Bill & Print</Button>
+               <Button type="submit" form="bill-form" disabled={isPending || !form.formState.isValid} size="lg">
+                 {isPending ? "Saving..." : <><Printer className="mr-2 h-4 w-4" /> Create Bill & Print</>}
+               </Button>
              </CardFooter>
           </Card>
         </div>
@@ -291,5 +310,3 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
     </div>
   )
 }
-
-    
