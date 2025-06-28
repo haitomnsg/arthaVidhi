@@ -3,12 +3,10 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import {
-  MoreHorizontal,
+  Download,
+  Eye,
   PlusCircle,
   Search,
-  Eye,
-  Trash2,
-  Pencil,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,13 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -36,6 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const allBills = [
     { invoice: "INV001", client: { name: "Liam Johnson", phone: "987-654-3214" }, date: "2023-10-25", amount: "Rs. 250.00", status: "Paid" },
@@ -60,81 +57,95 @@ export default function AllBillsPage() {
   }, [searchTerm]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Find Bill</CardTitle>
-            <CardDescription>Search and manage your bills.</CardDescription>
+    <TooltipProvider>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Find Bill</CardTitle>
+              <CardDescription>Search and manage your bills.</CardDescription>
+            </div>
+            <Button asChild>
+              <Link href="/dashboard/bills/create">
+                <PlusCircle className="mr-2 h-4 w-4" /> Create Bill
+              </Link>
+            </Button>
           </div>
-          <Button asChild>
-            <Link href="/dashboard/bills/create">
-              <PlusCircle className="mr-2 h-4 w-4" /> Create Bill
-            </Link>
-          </Button>
-        </div>
-        <div className="relative mt-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by invoice # or client name..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Invoice #</TableHead>
-              <TableHead>Client Name</TableHead>
-              <TableHead>Client Phone</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredBills.map((bill) => (
-              <TableRow key={bill.invoice}>
-                <TableCell className="font-medium">{bill.invoice}</TableCell>
-                <TableCell>{bill.client.name}</TableCell>
-                <TableCell>{bill.client.phone}</TableCell>
-                <TableCell>{bill.date}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      bill.status === "Paid" ? "default" : bill.status === "Pending" ? "secondary" : "destructive"
-                    }
-                     className={bill.status === "Paid" ? 'bg-green-500/20 text-green-700 border-green-500/20' : bill.status === "Pending" ? 'bg-amber-500/20 text-amber-700 border-amber-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}
-                  >
-                    {bill.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">{bill.amount}</TableCell>
-                <TableCell className="text-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem><Eye className="mr-2 h-4 w-4" />View</DropdownMenuItem>
-                      <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by invoice # or client name..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Client Name</TableHead>
+                <TableHead>Client Phone</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {filteredBills.map((bill) => (
+                <TableRow key={bill.invoice}>
+                  <TableCell className="font-medium">{bill.invoice}</TableCell>
+                  <TableCell>{bill.client.name}</TableCell>
+                  <TableCell>{bill.client.phone}</TableCell>
+                  <TableCell>{bill.date}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        bill.status === "Paid" ? "default" : bill.status === "Pending" ? "secondary" : "destructive"
+                      }
+                       className={bill.status === "Paid" ? 'bg-green-500/20 text-green-700 border-green-500/20' : bill.status === "Pending" ? 'bg-amber-500/20 text-amber-700 border-amber-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}
+                    >
+                      {bill.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{bill.amount}</TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href="#">
+                              <Download className="h-4 w-4 text-primary" />
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Download Bill</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href="#">
+                              <Eye className="h-4 w-4 text-primary" />
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>View Bill</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }
