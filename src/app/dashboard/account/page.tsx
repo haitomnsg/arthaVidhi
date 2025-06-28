@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -38,6 +39,19 @@ const accountFormSchema = z.object({
 
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
+const passwordFormSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required."),
+    newPassword: z.string().min(8, "Password must be at least 8 characters."),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+  });
+
+type PasswordFormValues = z.infer<typeof passwordFormSchema>;
+
 export default function AccountPage() {
   const { toast } = useToast();
 
@@ -55,12 +69,29 @@ export default function AccountPage() {
       companyVat: "",
     },
   });
+  
+  const passwordForm = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
 
   function onSubmit(data: AccountFormValues) {
     toast({
       title: "Profile Updated",
       description: "Your account and company details have been saved.",
     });
+  }
+
+  function onPasswordSubmit(data: PasswordFormValues) {
+    toast({
+      title: "Password Updated",
+      description: "Your password has been changed successfully.",
+    });
+    passwordForm.reset();
   }
 
   return (
@@ -219,6 +250,63 @@ export default function AccountPage() {
           <div className="flex justify-start">
              <Button type="submit">Save Changes</Button>
           </div>
+        </form>
+      </Form>
+
+      <Form {...passwordForm}>
+        <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>
+                Update your password here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm New Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+            <CardFooter>
+              <Button type="submit">Update Password</Button>
+            </CardFooter>
+          </Card>
         </form>
       </Form>
     </div>
