@@ -133,7 +133,7 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">SN. NO.</TableHead>
+                  <TableHead className="w-[100px]">Invoice #</TableHead>
                   <TableHead>Client Name</TableHead>
                   <TableHead>Client Phone</TableHead>
                   <TableHead>Date</TableHead>
@@ -143,9 +143,9 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentBills.map((bill, index) => (
+                {recentBills.map((bill) => (
                   <TableRow key={bill.invoice}>
-                    <TableCell className="font-medium">{index + 1}</TableCell>
+                    <TableCell className="font-medium">{bill.invoice}</TableCell>
                     <TableCell>
                       <div className="font-medium">{bill.client.name}</div>
                     </TableCell>
