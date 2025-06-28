@@ -109,13 +109,18 @@ export default function CreateBillPage() {
   };
 
   const watchedItems = form.watch("items");
-  const watchedDiscount = form.watch("discount") || 0;
+  const discountValue = form.watch("discount");
+  const discount = Number.isFinite(discountValue) ? discountValue : 0;
   
   const subtotal = watchedItems.reduce(
-    (acc, item) => acc + (item.quantity || 0) * (item.rate || 0),
+    (acc, item) => {
+        const quantity = Number.isFinite(item.quantity) ? item.quantity : 0;
+        const rate = Number.isFinite(item.rate) ? item.rate : 0;
+        return acc + quantity * rate;
+    },
     0
   );
-  const subtotalAfterDiscount = subtotal - watchedDiscount;
+  const subtotalAfterDiscount = subtotal - discount;
   const vat = subtotalAfterDiscount * 0.13;
   const total = subtotalAfterDiscount + vat;
 
@@ -215,13 +220,13 @@ export default function CreateBillPage() {
               <CardTitle>Bill Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <BillPreview bill={billData} subtotal={subtotal} discount={watchedDiscount} vat={vat} total={total} />
+              <BillPreview bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
             </CardContent>
           </Card>
         </div>
       </div>
       <div className="hidden print:block">
-        <BillPreview bill={billData} subtotal={subtotal} discount={watchedDiscount} vat={vat} total={total} />
+        <BillPreview bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
       </div>
     </>
   );

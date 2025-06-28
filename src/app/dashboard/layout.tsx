@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -51,7 +52,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar className="print:hidden">
         <SidebarHeader>
           <div className="p-2">
             <Logo />
@@ -77,7 +78,7 @@ export default function DashboardLayout({
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6 print:hidden">
           <SidebarTrigger />
           <div className="flex items-center gap-4">
             <DropdownMenu>
