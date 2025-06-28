@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,59 +8,55 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  email     String    @unique
-  phone     String
-  password  String // Remember to hash this!
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  company   Company?  @relation(fields: [companyId], references: [id])
-  companyId String?
-  bills     Bill[]
+  email     String   @unique
+  phone     String   @unique
+  password  String // Hashed password
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?  @unique
 }
 
 model Company {
   id        String   @id @default(cuid())
   name      String
-  address   String?
+  address   String?  @db.Text
   phone     String?
-  email     String?
-  pan       String?
-  vat       String?
-  users     User[]
+  email     String?  @unique
+  panNumber String?  @unique
+  vatNumber String?  @unique
+  user      User?
+  bills     Bill[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Bill {
-  id              String     @id @default(cuid())
-  invoiceNumber   String     @unique
-  clientName      String
-  clientAddress   String
-  clientPhone     String
-  clientPan       String?
-  billDate        DateTime
-  dueDate         DateTime
-  subtotal        Float
-  discount        Float      @default(0)
-  vat             Float
-  total           Float
-  status          String     // e.g., "Paid", "Pending", "Overdue"
-  items           BillItem[]
-  createdBy       User       @relation(fields: [createdById], references: [id])
-  createdById     String
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  clientName    String
+  clientAddress String   @db.Text
+  clientPhone   String
+  clientPan     String?
+  billDate      DateTime
+  dueDate       DateTime
+  discount      Float    @default(0)
+  status        String   @default("Pending") // e.g., Pending, Paid, Overdue
+  company       Company  @relation(fields: [companyId], references: [id])
+  companyId     String
+  items         BillItem[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model BillItem {
   id          String   @id @default(cuid())
-  description String
-  quantity    Float
+  description String   @db.Text
+  quantity    Int
   unit        String
   rate        Float
-  amount      Float
   bill        Bill     @relation(fields: [billId], references: [id])
   billId      String
   createdAt   DateTime @default(now())
