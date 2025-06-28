@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -23,11 +22,18 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 const accountFormSchema = z.object({
   name: z.string().min(2, "Name is too short."),
   email: z.string().email(),
   phone: z.string().min(10, "Invalid phone number."),
+  companyName: z.string().optional(),
+  companyAddress: z.string().optional(),
+  companyPhone: z.string().optional(),
+  companyEmail: z.string().email().optional().or(z.literal('')),
+  companyPan: z.string().optional(),
+  companyVat: z.string().optional(),
 });
 
 type AccountFormValues = z.infer<typeof accountFormSchema>;
@@ -41,13 +47,19 @@ export default function AccountPage() {
       name: "Test User",
       email: "test@haitomns.com",
       phone: "9876543210",
+      companyName: "Haitomns Groups",
+      companyAddress: "123 Business Rd, Kathmandu",
+      companyPhone: "9876543211",
+      companyEmail: "contact@haitomns.com",
+      companyPan: "",
+      companyVat: "",
     },
   });
 
   function onSubmit(data: AccountFormValues) {
     toast({
       title: "Profile Updated",
-      description: "Your account details have been saved.",
+      description: "Your account and company details have been saved.",
     });
   }
 
@@ -56,11 +68,11 @@ export default function AccountPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
         <p className="text-muted-foreground">
-          Manage your account details and preferences.
+          Manage your account and company details.
         </p>
       </div>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Profile</CardTitle>
@@ -109,10 +121,104 @@ export default function AccountPage() {
                 )}
               />
             </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <Button type="submit">Save Changes</Button>
-            </CardFooter>
           </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Company Details</CardTitle>
+              <CardDescription>
+                These details will be used on your invoices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <FormField
+                control={form.control}
+                name="companyName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Your Company LLC" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="companyAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Address</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="123 Main St, Anytown, USA" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="companyPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Company Phone Number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="companyEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="contact@company.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="companyPan"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company PAN Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="PAN Number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="companyVat"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company VAT Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="VAT Number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <div className="flex justify-start">
+             <Button type="submit">Save Changes</Button>
+          </div>
         </form>
       </Form>
     </div>
