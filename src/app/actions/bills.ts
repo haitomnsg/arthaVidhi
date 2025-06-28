@@ -76,7 +76,13 @@ export const createBill = async (values: BillFormValues) => {
             return createdBill;
         });
 
-        return { success: "Bill created successfully!", bill: newBill };
+        const serializableBill = {
+            ...newBill,
+            discount: newBill.discount.toNumber(),
+        };
+
+
+        return { success: "Bill created successfully!", bill: serializableBill };
     } catch (error) {
         console.error("Failed to create bill:", error);
         return { error: "Database Error: Failed to create bill." };
