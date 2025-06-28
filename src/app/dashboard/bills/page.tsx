@@ -6,9 +6,9 @@ import {
   MoreHorizontal,
   PlusCircle,
   Search,
-  Download,
   Eye,
   Trash2,
+  Pencil,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,13 +38,13 @@ import {
 } from "@/components/ui/table";
 
 const allBills = [
-    { invoice: "INV001", client: "Liam Johnson", date: "2023-10-25", amount: "Rs. 250.00", status: "Paid" },
-    { invoice: "INV002", client: "Olivia Smith", date: "2023-10-26", amount: "Rs. 150.00", status: "Pending" },
-    { invoice: "INV003", client: "Noah Williams", date: "2023-10-27", amount: "Rs. 350.00", status: "Paid" },
-    { invoice: "INV004", client: "Emma Brown", date: "2023-10-28", amount: "Rs. 450.00", status: "Overdue" },
-    { invoice: "INV005", client: "Ava Jones", date: "2023-10-29", amount: "Rs. 550.00", status: "Paid" },
-    { invoice: "INV006", client: "William Garcia", date: "2023-10-30", amount: "Rs. 200.00", status: "Pending" },
-    { invoice: "INV007", client: "Sophia Miller", date: "2023-10-31", amount: "Rs. 300.00", status: "Paid" },
+    { invoice: "INV001", client: { name: "Liam Johnson", phone: "987-654-3214" }, date: "2023-10-25", amount: "Rs. 250.00", status: "Paid" },
+    { invoice: "INV002", client: { name: "Olivia Smith", phone: "987-654-3213" }, date: "2023-10-26", amount: "Rs. 150.00", status: "Pending" },
+    { invoice: "INV003", client: { name: "Noah Williams", phone: "987-654-3212" }, date: "2023-10-27", amount: "Rs. 350.00", status: "Paid" },
+    { invoice: "INV004", client: { name: "Emma Brown", phone: "987-654-3211" }, date: "2023-10-28", amount: "Rs. 450.00", status: "Overdue" },
+    { invoice: "INV005", client: { name: "Ava Jones", phone: "987-654-3210" }, date: "2023-10-29", amount: "Rs. 550.00", status: "Paid" },
+    { invoice: "INV006", client: { name: "William Garcia", phone: "987-654-3215" }, date: "2023-10-30", amount: "Rs. 200.00", status: "Pending" },
+    { invoice: "INV007", client: { name: "Sophia Miller", phone: "987-654-3216" }, date: "2023-10-31", amount: "Rs. 300.00", status: "Paid" },
 ];
 
 export default function AllBillsPage() {
@@ -55,7 +55,7 @@ export default function AllBillsPage() {
     return allBills.filter(
       (bill) =>
         bill.invoice.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bill.client.toLowerCase().includes(searchTerm.toLowerCase())
+        bill.client.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm]);
 
@@ -88,18 +88,20 @@ export default function AllBillsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Invoice #</TableHead>
-              <TableHead>Client</TableHead>
+              <TableHead>Client Name</TableHead>
+              <TableHead>Client Phone</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredBills.map((bill) => (
               <TableRow key={bill.invoice}>
                 <TableCell className="font-medium">{bill.invoice}</TableCell>
-                <TableCell>{bill.client}</TableCell>
+                <TableCell>{bill.client.name}</TableCell>
+                <TableCell>{bill.client.phone}</TableCell>
                 <TableCell>{bill.date}</TableCell>
                 <TableCell>
                   <Badge
@@ -112,7 +114,7 @@ export default function AllBillsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">{bill.amount}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-center">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -122,8 +124,8 @@ export default function AllBillsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem><Eye className="mr-2 h-4 w-4" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Download PDF</DropdownMenuItem>
+                      <DropdownMenuItem><Eye className="mr-2 h-4 w-4" />View</DropdownMenuItem>
+                      <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
