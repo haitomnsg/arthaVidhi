@@ -13,14 +13,14 @@ datasource db {
 
 model User {
   id        String   @id @default(cuid())
-  name      String
   email     String   @unique
-  phone     String
+  name      String?
   password  String
-  company   Company? @relation(fields: [companyId], references: [id])
-  companyId String?  @unique
+  phone     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?  @unique
 }
 
 model Company {
@@ -28,39 +28,27 @@ model Company {
   name      String
   address   String?  @db.Text
   phone     String?
-  email     String?
-  pan       String?
-  vat       String?
-  user      User?
-  bills     Bill[]
+  email     String?  @unique
+  pan       String?  @unique
+  vat       String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User?
 }
 
 model Bill {
-  id            String     @id @default(cuid())
-  invoiceNumber String     @unique
+  id            String    @id @default(cuid())
+  invoiceNumber String    @unique
   clientName    String
-  clientAddress String     @db.Text
+  clientAddress String    @db.Text
   clientPhone   String
-  panNumber     String?
+  clientPan     String?
   billDate      DateTime
   dueDate       DateTime
-  discount      Float      @default(0)
+  items         Json // JSON array of BillItem
+  discount      Float     @default(0)
+  totalAmount   Float
   status        String // e.g., "Paid", "Pending", "Overdue"
-  items         BillItem[]
-  company       Company    @relation(fields: [companyId], references: [id])
-  companyId     String
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-}
-
-model BillItem {
-  id          String @id @default(cuid())
-  description String @db.Text
-  quantity    Int
-  unit        String
-  rate        Float
-  bill        Bill   @relation(fields: [billId], references: [id])
-  billId      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
