@@ -55,35 +55,35 @@ const stats = [
 const recentBills = [
   {
     invoice: "INV005",
-    client: { name: "Ava Jones", email: "ava@example.com" },
+    client: { name: "Ava Jones", phone: "987-654-3210" },
     amount: "Rs. 550.00",
     status: "Paid",
     date: "2023-10-29",
   },
   {
     invoice: "INV004",
-    client: { name: "Emma Brown", email: "emma@example.com" },
+    client: { name: "Emma Brown", phone: "987-654-3211" },
     amount: "Rs. 450.00",
     status: "Overdue",
     date: "2023-10-28",
   },
   {
     invoice: "INV003",
-    client: { name: "Noah Williams", email: "noah@example.com" },
+    client: { name: "Noah Williams", phone: "987-654-3212" },
     amount: "Rs. 350.00",
     status: "Paid",
     date: "2023-10-27",
   },
   {
     invoice: "INV002",
-    client: { name: "Olivia Smith", email: "olivia@example.com" },
+    client: { name: "Olivia Smith", phone: "987-654-3213" },
     amount: "Rs. 150.00",
     status: "Pending",
     date: "2023-10-26",
   },
   {
     invoice: "INV001",
-    client: { name: "Liam Johnson", email: "liam@example.com" },
+    client: { name: "Liam Johnson", phone: "987-654-3214" },
     amount: "Rs. 250.00",
     status: "Paid",
     date: "2023-10-25",
@@ -133,8 +133,9 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">SN. NO.</TableHead>
-                  <TableHead>Client</TableHead>
+                  <TableHead className="w-[100px]">SN. NO.</TableHead>
+                  <TableHead>Client Name</TableHead>
+                  <TableHead>Client Phone</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -146,11 +147,9 @@ export default function DashboardPage() {
                   <TableRow key={bill.invoice}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>
-                      <div className="grid gap-0.5">
-                        <p className="font-medium">{bill.client.name}</p>
-                        <p className="text-xs text-muted-foreground">{bill.client.email}</p>
-                      </div>
+                      <div className="font-medium">{bill.client.name}</div>
                     </TableCell>
+                    <TableCell>{bill.client.phone}</TableCell>
                     <TableCell>{bill.date}</TableCell>
                     <TableCell className="text-center">
                       <Badge
