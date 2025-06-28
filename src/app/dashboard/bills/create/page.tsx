@@ -55,6 +55,7 @@ const billFormSchema = z.object({
   clientPhone: z.string().min(1, "Client phone is required"),
   panNumber: z.string().optional(),
   billDate: z.date(),
+  dueDate: z.date(),
   items: z.array(billItemSchema).min(1, "At least one item is required"),
   discount: z.coerce.number().min(0, "Discount cannot be negative").optional(),
 });
@@ -71,6 +72,7 @@ export default function CreateBillPage() {
       clientPhone: "",
       panNumber: "",
       billDate: new Date(),
+      dueDate: new Date(),
       items: [{ description: "", quantity: 1, unit: "Pcs", rate: 0 }],
       discount: 0,
     },
@@ -105,7 +107,7 @@ export default function CreateBillPage() {
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:hidden">
-        <div>
+        <div className="min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>Create a New Bill</CardTitle>
@@ -123,10 +125,25 @@ export default function CreateBillPage() {
                        <FormField name="clientPhone" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Client Phone</FormLabel><FormControl><Input {...field} placeholder="9876543210"/></FormControl><FormMessage /></FormItem>)} />
                     </div>
                     <FormField name="clientAddress" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Client Address</FormLabel><FormControl><Textarea {...field} placeholder="123 Main St, Anytown..."/></FormControl><FormMessage /></FormItem>)} />
+                    <FormField name="panNumber" control={form.control} render={({ field }) => ( <FormItem><FormLabel>PAN Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Client's PAN"/></FormControl><FormMessage /></FormItem>)} />
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField name="panNumber" control={form.control} render={({ field }) => ( <FormItem><FormLabel>PAN Number (Optional)</FormLabel><FormControl><Input {...field} placeholder="Client's PAN"/></FormControl><FormMessage /></FormItem>)} />
                         <FormField name="billDate" control={form.control} render={({ field }) => (
                           <FormItem className="flex flex-col"><FormLabel>Bill Date</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}/>
+                        <FormField name="dueDate" control={form.control} render={({ field }) => (
+                          <FormItem className="flex flex-col"><FormLabel>Due Date</FormLabel>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <FormControl>
@@ -173,7 +190,7 @@ export default function CreateBillPage() {
              </CardFooter>
           </Card>
         </div>
-        <div>
+        <div className="min-w-0">
           <Card className="sticky top-20">
             <CardHeader>
               <CardTitle>Bill Preview</CardTitle>
@@ -201,6 +218,7 @@ interface BillPreviewProps {
 
 function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
+  const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
   return (
     <div className="bg-card text-card-foreground p-8 rounded-lg border">
        <header className="flex justify-between items-start mb-8">
@@ -223,7 +241,7 @@ function BillPreview({ bill, subtotal, discount, vat, total }: BillPreviewProps)
         </div>
         <div className="text-right">
           <p><span className="font-semibold">Bill Date:</span> {formattedDate}</p>
-          <p><span className="font-semibold">Due Date:</span> {formattedDate}</p>
+          <p><span className="font-semibold">Due Date:</span> {formattedDueDate}</p>
         </div>
        </div>
 
