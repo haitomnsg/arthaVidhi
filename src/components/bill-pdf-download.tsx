@@ -300,7 +300,7 @@ export const BillPDFGenerator = ({ data, onComplete }: { data: PDFData; onComple
           }, 500);
           return () => clearTimeout(timer);
         }
-    }, [isClient, onComplete, data]);
+    }, [isClient, onComplete]);
 
     if (!isClient) {
         return null;
