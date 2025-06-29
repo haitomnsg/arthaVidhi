@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PDFDownloadLink, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import type { Company } from '@prisma/client';
@@ -287,16 +286,25 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
 
 export const BillPDFGenerator = ({ data, onComplete }: { data: PDFData; onComplete: () => void }) => {
     const downloadLinkRef = useRef<HTMLAnchorElement & { click: () => void }>(null);
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        if (downloadLinkRef.current) {
+        setIsClient(true);
+    }, []);
+
+    useEffect(() => {
+        if (isClient && downloadLinkRef.current) {
           const timer = setTimeout(() => {
             downloadLinkRef.current?.click();
             onComplete();
           }, 500);
           return () => clearTimeout(timer);
         }
-    }, [onComplete]);
+    }, [isClient, onComplete, data]);
+
+    if (!isClient) {
+        return null;
+    }
 
     return (
         <PDFDownloadLink
