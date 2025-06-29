@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -24,20 +25,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { getAccountDetails, updateUserProfile, updatePassword, upsertCompany } from "@/app/actions/account";
+import type { User, Company } from "@prisma/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const accountFormSchema = z.object({
+const profileFormSchema = z.object({
   name: z.string().min(2, "Name is too short."),
   email: z.string().email(),
   phone: z.string().min(10, "Invalid phone number."),
-  companyName: z.string().optional(),
-  companyAddress: z.string().optional(),
-  companyPhone: z.string().optional(),
-  companyEmail: z.string().email().optional().or(z.literal('')),
-  companyPan: z.string().optional(),
-  companyVat: z.string().optional(),
 });
 
-type AccountFormValues = z.infer<typeof accountFormSchema>;
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 const passwordFormSchema = z
   .object({
@@ -52,46 +50,100 @@ const passwordFormSchema = z
 
 type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 
+const companyFormSchema = z.object({
+  name: z.string().min(2, "Company name is required."),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  panNumber: z.string().optional(),
+  vatNumber: z.string().optional(),
+});
+
+type CompanyFormValues = z.infer<typeof companyFormSchema>;
+
 export default function AccountPage() {
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = useState(true);
 
-  const form = useForm<AccountFormValues>({
-    resolver: zodResolver(accountFormSchema),
-    defaultValues: {
-      name: "Test User",
-      email: "test@haitomns.com",
-      phone: "9876543210",
-      companyName: "Haitomns Groups",
-      companyAddress: "123 Business Rd, Kathmandu",
-      companyPhone: "9876543211",
-      companyEmail: "contact@haitomns.com",
-      companyPan: "",
-      companyVat: "",
-    },
+  const profileForm = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: { name: "", email: "", phone: "" },
   });
-  
+
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
-    defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    },
   });
 
-  function onSubmit(data: AccountFormValues) {
-    toast({
-      title: "Profile Updated",
-      description: "Your account and company details have been saved.",
-    });
-  }
+  const companyForm = useForm<CompanyFormValues>({
+    resolver: zodResolver(companyFormSchema),
+  });
 
-  function onPasswordSubmit(data: PasswordFormValues) {
-    toast({
-      title: "Password Updated",
-      description: "Your password has been changed successfully.",
+  useEffect(() => {
+    setIsLoading(true);
+    getAccountDetails().then(({ user, company }) => {
+      if (user) {
+        profileForm.reset({
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+        });
+      }
+      if (company) {
+        companyForm.reset({
+          name: company.name,
+          address: company.address || "",
+          phone: company.phone || "",
+          email: company.email || "",
+          panNumber: company.panNumber || "",
+          vatNumber: company.vatNumber || "",
+        });
+      } else {
+        companyForm.reset({
+            name: "Your Company Name",
+            address: "123 Business Rd, Kathmandu",
+            phone: "9876543210",
+            email: "contact@company.com",
+            panNumber: "123456789",
+            vatNumber: "",
+        });
+      }
+      setIsLoading(false);
     });
-    passwordForm.reset();
+  }, [profileForm, companyForm]);
+
+  const onProfileSubmit = (data: ProfileFormValues) => {
+    startTransition(() => {
+        updateUserProfile(data).then(res => {
+            if(res.error) toast({ title: "Update Failed", description: res.error, variant: "destructive" });
+            if(res.success) toast({ title: "Profile Updated", description: res.success });
+        });
+    });
+  };
+
+  const onPasswordSubmit = (data: PasswordFormValues) => {
+    startTransition(() => {
+        updatePassword(data).then(res => {
+            if(res.error) toast({ title: "Update Failed", description: res.error, variant: "destructive" });
+            if(res.success) {
+                toast({ title: "Password Updated", description: res.success });
+                passwordForm.reset({ currentPassword: "", newPassword: "", confirmPassword: ""});
+            }
+        });
+    });
+  };
+  
+  const onCompanySubmit = (data: CompanyFormValues) => {
+    startTransition(() => {
+        upsertCompany(data).then(res => {
+            if(res.error) toast({ title: "Update Failed", description: res.error, variant: "destructive" });
+            if(res.success) toast({ title: "Company Details Saved", description: res.success });
+        });
+    });
+  };
+
+  if (isLoading) {
+      return <AccountPageSkeleton />;
   }
 
   return (
@@ -102,18 +154,19 @@ export default function AccountPage() {
           Manage your account and company details.
         </p>
       </div>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      
+      <Form {...profileForm}>
+        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Profile</CardTitle>
               <CardDescription>
-                This is how others will see you on the site.
+                Update your personal details here.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
-                control={form.control}
+                control={profileForm.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
@@ -126,7 +179,7 @@ export default function AccountPage() {
                 )}
               />
               <FormField
-                control={form.control}
+                control={profileForm.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
@@ -139,7 +192,7 @@ export default function AccountPage() {
                 )}
               />
               <FormField
-                control={form.control}
+                control={profileForm.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
@@ -152,8 +205,15 @@ export default function AccountPage() {
                 )}
               />
             </CardContent>
+            <CardFooter>
+              <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Profile'}</Button>
+            </CardFooter>
           </Card>
-          
+        </form>
+      </Form>
+      
+      <Form {...companyForm}>
+        <form onSubmit={companyForm.handleSubmit(onCompanySubmit)} className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Company Details</CardTitle>
@@ -163,8 +223,8 @@ export default function AccountPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
-                control={form.control}
-                name="companyName"
+                control={companyForm.control}
+                name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Company Name</FormLabel>
@@ -176,8 +236,8 @@ export default function AccountPage() {
                 )}
               />
               <FormField
-                control={form.control}
-                name="companyAddress"
+                control={companyForm.control}
+                name="address"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Company Address</FormLabel>
@@ -190,8 +250,8 @@ export default function AccountPage() {
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <FormField
-                  control={form.control}
-                  name="companyPhone"
+                  control={companyForm.control}
+                  name="phone"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company Phone</FormLabel>
@@ -203,8 +263,8 @@ export default function AccountPage() {
                   )}
                 />
                 <FormField
-                  control={form.control}
-                  name="companyEmail"
+                  control={companyForm.control}
+                  name="email"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company Email</FormLabel>
@@ -218,8 +278,8 @@ export default function AccountPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <FormField
-                  control={form.control}
-                  name="companyPan"
+                  control={companyForm.control}
+                  name="panNumber"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company PAN Number</FormLabel>
@@ -231,8 +291,8 @@ export default function AccountPage() {
                   )}
                 />
                 <FormField
-                  control={form.control}
-                  name="companyVat"
+                  control={companyForm.control}
+                  name="vatNumber"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company VAT Number</FormLabel>
@@ -245,11 +305,10 @@ export default function AccountPage() {
                 />
               </div>
             </CardContent>
+             <CardFooter>
+               <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Changes'}</Button>
+             </CardFooter>
           </Card>
-          
-          <div className="flex justify-start">
-             <Button type="submit">Save Changes</Button>
-          </div>
         </form>
       </Form>
 
@@ -304,11 +363,50 @@ export default function AccountPage() {
               />
             </CardContent>
             <CardFooter>
-              <Button type="submit">Update Password</Button>
+              <Button type="submit" disabled={isPending}>{isPending ? 'Updating...' : 'Update Password'}</Button>
             </CardFooter>
           </Card>
         </form>
       </Form>
     </div>
   );
+}
+
+
+function AccountPageSkeleton() {
+    return (
+        <div className="mx-auto max-w-2xl space-y-6">
+            <div>
+                <Skeleton className="h-9 w-64 mb-2" />
+                <Skeleton className="h-5 w-80" />
+            </div>
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-7 w-24 mb-2" />
+                    <Skeleton className="h-5 w-48" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
+                    <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
+                    <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
+                </CardContent>
+                <CardFooter>
+                    <Skeleton className="h-10 w-28" />
+                </CardFooter>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-7 w-40 mb-2" />
+                    <Skeleton className="h-5 w-56" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-10 w-full" /></div>
+                    <div className="space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-20 w-full" /></div>
+                </CardContent>
+                <CardFooter>
+                    <Skeleton className="h-10 w-32" />
+                </CardFooter>
+            </Card>
+        </div>
+    );
 }
