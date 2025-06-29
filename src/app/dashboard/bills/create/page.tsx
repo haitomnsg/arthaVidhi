@@ -350,7 +350,16 @@ export default function CreateBillPage() {
               <CardTitle>Bill Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <BillPreview company={companyDetails} bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} appliedDiscountLabel={appliedDiscountLabel} />
+              <BillPreview 
+                company={companyDetails} 
+                bill={billData} 
+                subtotal={subtotal} 
+                discount={discount}
+                subtotalAfterDiscount={subtotalAfterDiscount}
+                vat={vat} 
+                total={total} 
+                appliedDiscountLabel={appliedDiscountLabel} 
+              />
             </CardContent>
           </Card>
         </div>
@@ -364,12 +373,13 @@ interface BillPreviewProps {
     bill: Partial<BillFormValues>;
     subtotal: number;
     discount: number;
+    subtotalAfterDiscount: number;
     vat: number;
     total: number;
     appliedDiscountLabel: string;
 }
 
-function BillPreview({ company, bill, subtotal, discount, vat, total, appliedDiscountLabel }: BillPreviewProps) {
+function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
   const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
   return (
