@@ -1,6 +1,6 @@
 'use client';
 
-import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { pdf, Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import type { Company } from '@prisma/client';
 
@@ -18,7 +18,9 @@ type BillFormValues = {
     unit: string;
     rate: number;
   }[];
-  discount?: number;
+  discountType: 'percentage' | 'amount';
+  discountPercentage?: number;
+  discountAmount?: number;
 };
 
 export interface PDFData {
@@ -29,7 +31,15 @@ export interface PDFData {
     vat: number;
     total: number;
     invoiceNumber: string;
+    appliedDiscountLabel: string;
 }
+
+// Register fonts - this is an example, you might need to host your fonts
+// Font.register({ family: 'Inter', fonts: [
+//   { src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuOKfMZhrib2emHo.woff2', fontWeight: 400 },
+//   { src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuOKfMZhrib2emHo.woff2', fontWeight: 700 },
+// ]});
+
 
 const pdfStyles = StyleSheet.create({
   page: {
@@ -126,6 +136,7 @@ const pdfStyles = StyleSheet.create({
     padding: 5,
     fontWeight: 'bold',
     fontSize: 10,
+    textAlign: 'right'
   },
   tableColHeaderDesc: {
     width: '40%',
@@ -200,7 +211,7 @@ const pdfStyles = StyleSheet.create({
 });
 
 
-const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoiceNumber }: PDFData) => {
+const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoiceNumber, appliedDiscountLabel }: PDFData) => {
     const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
     const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
 
@@ -212,7 +223,7 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
                         <Text style={pdfStyles.companyName}>{company.name}</Text>
                         <Text style={pdfStyles.companyInfo}>{company.address}</Text>
                         <Text style={pdfStyles.companyInfo}>Phone: {company.phone} | Email: {company.email}</Text>
-                        <Text style={pdfStyles.companyInfo}>PAN: {company.panNumber} | VAT: {company.vatNumber}</Text>
+                        <Text style={pdfStyles.companyInfo}>PAN: {company.panNumber} {company.vatNumber ? `| VAT: ${company.vatNumber}` : ''}</Text>
                     </View>
                     <View style={pdfStyles.invoiceTitleSection}>
                         <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
@@ -237,9 +248,9 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
                 <View style={pdfStyles.table}>
                     <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
                         <Text style={pdfStyles.tableColHeaderDesc}>Description</Text>
-                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Quantity</Text>
-                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Rate (Rs.)</Text>
-                        <Text style={[pdfStyles.tableColHeader, {textAlign: 'right'}]}>Amount (Rs.)</Text>
+                        <Text style={pdfStyles.tableColHeader}>Quantity</Text>
+                        <Text style={pdfStyles.tableColHeader}>Rate (Rs.)</Text>
+                        <Text style={pdfStyles.tableColHeader}>Amount (Rs.)</Text>
                     </View>
                     {bill.items.map((item, index) => (
                         <View key={index} style={[pdfStyles.tableRow, pdfStyles.tableBodyRow]}>
@@ -258,7 +269,7 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
                             <Text style={pdfStyles.summaryValue}>Rs. {subtotal.toFixed(2)}</Text>
                         </View>
                         <View style={pdfStyles.summaryRow}>
-                            <Text style={pdfStyles.summaryLabel}>Discount</Text>
+                            <Text style={pdfStyles.summaryLabel}>{appliedDiscountLabel}</Text>
                             <Text style={pdfStyles.summaryValue}>- Rs. {discount.toFixed(2)}</Text>
                         </View>
                         <View style={pdfStyles.summaryRow}>
@@ -294,7 +305,6 @@ export const generateAndDownloadPdf = async (data: PDFData) => {
         document.body.appendChild(link);
         link.click();
         
-        // Clean up the DOM and object URL
         setTimeout(() => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
@@ -302,6 +312,6 @@ export const generateAndDownloadPdf = async (data: PDFData) => {
 
     } catch (error) {
         console.error("Error generating PDF: ", error);
-        // Optionally, inform the user that PDF generation failed.
+        alert("Failed to generate PDF. Please try again.");
     }
 };

@@ -18,7 +18,9 @@ const billFormSchema = z.object({
   billDate: z.date(),
   dueDate: z.date(),
   items: z.array(billItemSchema).min(1, "At least one item is required"),
-  discount: z.coerce.number().min(0, "Discount cannot be negative").optional(),
+  discountType: z.enum(['percentage', 'amount']),
+  discountPercentage: z.coerce.number().min(0).max(100).optional(),
+  discountAmount: z.coerce.number().min(0).optional(),
 });
 
 type BillFormValues = z.infer<typeof billFormSchema>;
@@ -38,12 +40,24 @@ export const createBill = async (values: BillFormValues) => {
         billDate,
         dueDate,
         items,
-        discount
+        discountType,
+        discountPercentage,
+        discountAmount,
     } = validatedFields.data;
 
     // TODO: This is a placeholder. We need to implement session management
     // to get the ID of the currently logged-in user.
     const userId = 1;
+    
+    const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
+    
+    let finalDiscount = 0;
+    if (discountType === 'percentage') {
+        finalDiscount = subtotal * ((discountPercentage || 0) / 100);
+    } else {
+        finalDiscount = discountAmount || 0;
+    }
+
 
     try {
         const newBill = await prisma.$transaction(async (tx) => {
@@ -56,7 +70,7 @@ export const createBill = async (values: BillFormValues) => {
                     clientPanNumber: panNumber,
                     billDate,
                     dueDate,
-                    discount: discount || 0,
+                    discount: finalDiscount,
                     status: 'Pending', // Default status
                     user: {
                         connect: { id: userId }

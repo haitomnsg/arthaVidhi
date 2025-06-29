@@ -40,6 +40,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
@@ -62,10 +63,25 @@ const billFormSchema = z.object({
   billDate: z.date(),
   dueDate: z.date(),
   items: z.array(billItemSchema).min(1, "At least one item is required"),
-  discount: z.coerce.number().min(0, "Discount cannot be negative").optional(),
+  discountType: z.enum(['percentage', 'amount']).default('amount'),
+  discountPercentage: z.coerce.number().min(0, "Cannot be negative").max(100, "Cannot exceed 100").optional(),
+  discountAmount: z.coerce.number().min(0, "Cannot be negative").optional(),
 });
 
 type BillFormValues = z.infer<typeof billFormSchema>;
+
+const defaultFormValues: BillFormValues = {
+  clientName: "",
+  clientAddress: "",
+  clientPhone: "",
+  panNumber: "",
+  billDate: new Date(),
+  dueDate: new Date(),
+  items: [{ description: "", quantity: 1, unit: "Pcs", rate: 0 }],
+  discountType: 'amount',
+  discountAmount: 0,
+  discountPercentage: 0,
+};
 
 export default function CreateBillPage() {
   const { toast } = useToast();
@@ -78,16 +94,7 @@ export default function CreateBillPage() {
 
   const form = useForm<BillFormValues>({
     resolver: zodResolver(billFormSchema),
-    defaultValues: {
-      clientName: "",
-      clientAddress: "",
-      clientPhone: "",
-      panNumber: "",
-      billDate: new Date(),
-      dueDate: new Date(),
-      items: [{ description: "", quantity: 1, unit: "Pcs", rate: 0 }],
-      discount: 0,
-    },
+    defaultValues: defaultFormValues,
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -96,16 +103,44 @@ export default function CreateBillPage() {
   });
 
   const watchedItems = form.watch("items");
-  const discountValue = form.watch("discount");
+  const discountType = form.watch("discountType");
+  const discountAmount = form.watch("discountAmount");
+  const discountPercentage = form.watch("discountPercentage");
 
-  const { subtotal, discount, subtotalAfterDiscount, vat, total } = useMemo(() => {
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'discountType') {
+        if (value.discountType === 'percentage') {
+          form.setValue('discountAmount', 0);
+        } else {
+          form.setValue('discountPercentage', 0);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+
+  const { subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = useMemo(() => {
     const calculatedSubtotal = (watchedItems || []).reduce((acc, item) => {
       const quantity = Number(item.quantity) || 0;
       const rate = Number(item.rate) || 0;
       return acc + quantity * rate;
     }, 0);
 
-    const calculatedDiscount = Number(discountValue) || 0;
+    let calculatedDiscount = 0;
+    let label = 'Discount';
+
+    if (discountType === 'percentage') {
+        const percentage = Number(discountPercentage) || 0;
+        if (percentage > 0) {
+            calculatedDiscount = calculatedSubtotal * (percentage / 100);
+            label = `Discount (${percentage}%)`;
+        }
+    } else {
+        calculatedDiscount = Number(discountAmount) || 0;
+    }
+
     const calculatedSubtotalAfterDiscount = calculatedSubtotal - calculatedDiscount;
     const calculatedVat = calculatedSubtotalAfterDiscount * 0.13;
     const calculatedTotal = calculatedSubtotalAfterDiscount + calculatedVat;
@@ -115,9 +150,10 @@ export default function CreateBillPage() {
       discount: calculatedDiscount,
       subtotalAfterDiscount: calculatedSubtotalAfterDiscount,
       vat: calculatedVat,
-      total: calculatedTotal
+      total: calculatedTotal,
+      appliedDiscountLabel: label,
     };
-  }, [watchedItems, discountValue]);
+  }, [watchedItems, discountType, discountAmount, discountPercentage]);
 
 
   const onSubmit = (values: BillFormValues) => {
@@ -143,8 +179,10 @@ export default function CreateBillPage() {
                     vat,
                     total,
                     invoiceNumber: data.bill.invoiceNumber,
+                    appliedDiscountLabel: appliedDiscountLabel,
                 };
                 generateAndDownloadPdf(pdfData);
+                form.reset(defaultFormValues);
             }
         });
     });
@@ -227,8 +265,74 @@ export default function CreateBillPage() {
                   </div>
                   <Separator />
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Summary</h3>
-                    <FormField name="discount" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Discount (Rs.)</FormLabel><FormControl><Input type="number" {...field} placeholder="0.00"/></FormControl><FormMessage /></FormItem>)} />
+                    <h3 className="text-lg font-medium">Discount</h3>
+                    <FormField
+                      control={form.control}
+                      name="discountType"
+                      render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              className="flex items-center space-x-4"
+                            >
+                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <RadioGroupItem value="amount" />
+                                </FormControl>
+                                <FormLabel className="font-normal">In Amount (Rs.)</FormLabel>
+                              </FormItem>
+                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <RadioGroupItem value="percentage" />
+                                </FormControl>
+                                <FormLabel className="font-normal">In Percentage (%)</FormLabel>
+                              </FormItem>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            name="discountAmount"
+                            control={form.control}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Amount</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            {...field}
+                                            placeholder="e.g. 100"
+                                            disabled={discountType === 'percentage'}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            name="discountPercentage"
+                            control={form.control}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Percentage</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            {...field}
+                                            placeholder="e.g. 10"
+                                            disabled={discountType === 'amount'}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
                   </div>
                 </form>
               </Form>
@@ -246,7 +350,7 @@ export default function CreateBillPage() {
               <CardTitle>Bill Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <BillPreview company={companyDetails} bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} />
+              <BillPreview company={companyDetails} bill={billData} subtotal={subtotal} discount={discount} vat={vat} total={total} appliedDiscountLabel={appliedDiscountLabel} />
             </CardContent>
           </Card>
         </div>
@@ -262,13 +366,14 @@ interface BillPreviewProps {
     discount: number;
     vat: number;
     total: number;
+    appliedDiscountLabel: string;
 }
 
-function BillPreview({ company, bill, subtotal, discount, vat, total }: BillPreviewProps) {
+function BillPreview({ company, bill, subtotal, discount, vat, total, appliedDiscountLabel }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
   const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
   return (
-    <div className="bg-card text-card-foreground p-8 rounded-lg border">
+    <div className="bg-card text-card-foreground p-8 rounded-lg border print:border-none print:shadow-none">
        <header className="flex justify-between items-start mb-8">
         <div>
           <Logo />
@@ -316,7 +421,7 @@ function BillPreview({ company, bill, subtotal, discount, vat, total }: BillPrev
             </tr>
           </thead>
           <tbody>
-            {(bill.items && bill.items.length > 0 && bill.items[0].description) ? bill.items.map((item, index) => (
+            {(bill.items && bill.items.length > 0 && (bill.items[0].description || bill.items[0].rate > 0)) ? bill.items.map((item, index) => (
               <tr key={index} className="border-b">
                 <td className="p-3">{item.description}</td>
                 <td className="p-3 text-center">{item.quantity}</td>
@@ -334,9 +439,9 @@ function BillPreview({ company, bill, subtotal, discount, vat, total }: BillPrev
        <div className="flex justify-end mt-8">
         <div className="w-full max-w-xs space-y-2">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>- Rs. {discount.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{appliedDiscountLabel}</span><span>- Rs. {discount.toFixed(2)}</span></div>
             <Separator />
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal after Discount</span><span>Rs. {(subtotal - discount).toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal after Discount</span><span>Rs. {subtotalAfterDiscount.toFixed(2)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">VAT (13%)</span><span>Rs. {vat.toFixed(2)}</span></div>
             <Separator />
             <div className="flex justify-between font-bold text-lg"><span className="text-primary">Total</span><span className="text-primary">Rs. {total.toFixed(2)}</span></div>
