@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useTransition, useState, useEffect, useMemo } from "react";
-import dynamic from "next/dynamic";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
@@ -46,12 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
 import { createBill } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
-import type { PDFData } from "@/components/bill-pdf-download";
-
-const BillPDFGenerator = dynamic(
-    () => import('@/components/bill-pdf-download').then(mod => mod.BillPDFGenerator),
-    { ssr: false }
-);
+import { generateAndDownloadPdf, type PDFData } from "@/components/bill-pdf-download";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -77,8 +71,7 @@ export default function CreateBillPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [companyDetails, setCompanyDetails] = useState<Partial<Company>>({});
-  const [pdfData, setPdfData] = useState<PDFData | null>(null);
-
+  
   useEffect(() => {
     getCompanyDetails().then(setCompanyDetails);
   }, []);
@@ -105,21 +98,27 @@ export default function CreateBillPage() {
   const watchedItems = form.watch("items");
   const discountValue = form.watch("discount");
 
-  const subtotal = useMemo(() => {
-    return watchedItems.reduce((acc, item) => {
-      const quantity = parseFloat(String(item.quantity)) || 0;
-      const rate = parseFloat(String(item.rate)) || 0;
+  const { subtotal, discount, subtotalAfterDiscount, vat, total } = useMemo(() => {
+    const calculatedSubtotal = (watchedItems || []).reduce((acc, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const rate = Number(item.rate) || 0;
       return acc + quantity * rate;
     }, 0);
-  }, [watchedItems]);
 
-  const discount = useMemo(() => {
-    return parseFloat(String(discountValue)) || 0;
-  }, [discountValue]);
-  
-  const subtotalAfterDiscount = subtotal - discount;
-  const vat = subtotalAfterDiscount * 0.13;
-  const total = subtotalAfterDiscount + vat;
+    const calculatedDiscount = Number(discountValue) || 0;
+    const calculatedSubtotalAfterDiscount = calculatedSubtotal - calculatedDiscount;
+    const calculatedVat = calculatedSubtotalAfterDiscount * 0.13;
+    const calculatedTotal = calculatedSubtotalAfterDiscount + calculatedVat;
+
+    return {
+      subtotal: calculatedSubtotal,
+      discount: calculatedDiscount,
+      subtotalAfterDiscount: calculatedSubtotalAfterDiscount,
+      vat: calculatedVat,
+      total: calculatedTotal
+    };
+  }, [watchedItems, discountValue]);
+
 
   const onSubmit = (values: BillFormValues) => {
     startTransition(() => {
@@ -136,7 +135,7 @@ export default function CreateBillPage() {
                     title: "Bill Created",
                     description: "Your PDF will download automatically.",
                 });
-                setPdfData({
+                const pdfData: PDFData = {
                     bill: values,
                     company: companyDetails,
                     subtotal,
@@ -144,7 +143,8 @@ export default function CreateBillPage() {
                     vat,
                     total,
                     invoiceNumber: data.bill.invoiceNumber,
-                });
+                };
+                generateAndDownloadPdf(pdfData);
             }
         });
     });
@@ -251,9 +251,6 @@ export default function CreateBillPage() {
           </Card>
         </div>
       </div>
-      {pdfData && (
-        <BillPDFGenerator data={pdfData} onComplete={() => setPdfData(null)} />
-      )}
     </>
   );
 }

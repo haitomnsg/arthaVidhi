@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { PDFDownloadLink, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import type { Company } from '@prisma/client';
 
@@ -284,36 +283,25 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
 };
 
 
-export const BillPDFGenerator = ({ data, onComplete }: { data: PDFData; onComplete: () => void }) => {
-    const downloadLinkRef = useRef<HTMLAnchorElement & { click: () => void }>(null);
-    const [isClient, setIsClient] = useState(false);
+export const generateAndDownloadPdf = async (data: PDFData) => {
+    try {
+        const doc = <BillPDFDocument {...data} />;
+        const blob = await pdf(doc).toBlob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${data.invoiceNumber}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up the DOM and object URL
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
 
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    useEffect(() => {
-        if (isClient && downloadLinkRef.current) {
-          const timer = setTimeout(() => {
-            downloadLinkRef.current?.click();
-            onComplete();
-          }, 500);
-          return () => clearTimeout(timer);
-        }
-    }, [isClient, onComplete]);
-
-    if (!isClient) {
-        return null;
+    } catch (error) {
+        console.error("Error generating PDF: ", error);
+        // Optionally, inform the user that PDF generation failed.
     }
-
-    return (
-        <PDFDownloadLink
-            document={<BillPDFDocument {...data} />}
-            fileName={`${data.invoiceNumber}.pdf`}
-            ref={downloadLinkRef as any}
-            style={{ display: "none" }}
-        >
-            {({loading}) => (loading ? 'Loading...' : 'Download')}
-        </PDFDownloadLink>
-    );
-}
+};
