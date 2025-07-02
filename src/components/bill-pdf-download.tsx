@@ -1,6 +1,6 @@
 'use client';
 
-import { pdf, Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import type { Company } from '@prisma/client';
 
@@ -33,13 +33,6 @@ export interface PDFData {
     invoiceNumber: string;
     appliedDiscountLabel: string;
 }
-
-// Register fonts - this is an example, you might need to host your fonts
-// Font.register({ family: 'Inter', fonts: [
-//   { src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuOKfMZhrib2emHo.woff2', fontWeight: 400 },
-//   { src: 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuOKfMZhrib2emHo.woff2', fontWeight: 700 },
-// ]});
-
 
 const pdfStyles = StyleSheet.create({
   page: {
@@ -214,16 +207,17 @@ const pdfStyles = StyleSheet.create({
 const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoiceNumber, appliedDiscountLabel }: PDFData) => {
     const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
     const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
+    const subtotalAfterDiscount = subtotal - discount;
 
     return (
         <Document>
             <Page size="A4" style={pdfStyles.page}>
                 <View style={pdfStyles.header}>
                     <View style={pdfStyles.companyDetails}>
-                        <Text style={pdfStyles.companyName}>{company.name}</Text>
-                        <Text style={pdfStyles.companyInfo}>{company.address}</Text>
-                        <Text style={pdfStyles.companyInfo}>Phone: {company.phone} | Email: {company.email}</Text>
-                        <Text style={pdfStyles.companyInfo}>PAN: {company.panNumber} {company.vatNumber ? `| VAT: ${company.vatNumber}` : ''}</Text>
+                        <Text style={pdfStyles.companyName}>{company.name || "Your Company Name"}</Text>
+                        <Text style={pdfStyles.companyInfo}>{company.address || "123 Business Rd, Kathmandu"}</Text>
+                        <Text style={pdfStyles.companyInfo}>Phone: {company.phone || "N/A"} | Email: {company.email || "N/A"}</Text>
+                        <Text style={pdfStyles.companyInfo}>PAN: {company.panNumber || "N/A"} {company.vatNumber ? `| VAT: ${company.vatNumber}` : ''}</Text>
                     </View>
                     <View style={pdfStyles.invoiceTitleSection}>
                         <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
@@ -274,7 +268,7 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
                         </View>
                         <View style={pdfStyles.summaryRow}>
                             <Text style={pdfStyles.summaryLabel}>Subtotal after Discount</Text>
-                            <Text style={pdfStyles.summaryValue}>Rs. {(subtotal - discount).toFixed(2)}</Text>
+                            <Text style={pdfStyles.summaryValue}>Rs. {subtotalAfterDiscount.toFixed(2)}</Text>
                         </View>
                         <View style={pdfStyles.summaryRow}>
                             <Text style={pdfStyles.summaryLabel}>VAT (13%)</Text>

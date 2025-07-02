@@ -61,9 +61,21 @@ export const createBill = async (values: BillFormValues) => {
 
     try {
         const newBill = await prisma.$transaction(async (tx) => {
+            const lastBill = await tx.bill.findFirst({
+                orderBy: { id: 'desc' }
+            });
+
+            let invoiceNumber: string;
+            if (lastBill && lastBill.invoiceNumber.startsWith('HG')) {
+                const lastNum = parseInt(lastBill.invoiceNumber.substring(2), 10);
+                invoiceNumber = `HG${String(lastNum + 1).padStart(4, '0')}`;
+            } else {
+                invoiceNumber = 'HG0100';
+            }
+
             const createdBill = await tx.bill.create({
                 data: {
-                    invoiceNumber: `INV-${Date.now()}`, // Simple unique invoice number
+                    invoiceNumber,
                     clientName,
                     clientAddress,
                     clientPhone,
