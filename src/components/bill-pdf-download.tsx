@@ -1,44 +1,17 @@
 'use client';
 
-import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import jsPDF from 'jspdf';
 
-const styles = StyleSheet.create({
-  page: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF'
-  },
-  section: {
-    margin: 10,
-    padding: 10,
-    flexGrow: 1
-  }
-});
-
-const MyDocument = () => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      <View style={styles.section}>
-        <Text>Hello World!</Text>
-      </View>
-    </Page>
-  </Document>
-);
-
-export const downloadTestPdf = async () => {
+export const downloadTestPdf = () => {
   try {
-    const doc = <MyDocument />;
-    const blob = await pdf(doc).toBlob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'hello-world.pdf';
-    document.body.appendChild(link);
-    link.click();
-    
-    setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }, 100);
+    // Create a new PDF document
+    const doc = new jsPDF();
+
+    // Add "Hello World!" text to the document
+    doc.text("Hello World!", 10, 10);
+
+    // Save the PDF with the name "hello-world.pdf"
+    doc.save("hello-world.pdf");
 
   } catch (error) {
     console.error("Error generating test PDF: ", error);
