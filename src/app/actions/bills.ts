@@ -44,7 +44,7 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
 
     const userId = 1;
 
-    // --- Server-side calculations for the PDF payload ---
+    // --- Server-side calculations ---
     const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
     
     let finalDiscount = 0;
@@ -106,7 +106,6 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
             });
         });
         
-        // Fetch company details to return for the PDF
         const company = await prisma.company.findUnique({
             where: { userId },
         });
@@ -115,9 +114,20 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
             return { error: "Failed to retrieve the created bill after saving." };
         }
 
+        // Convert Prisma Decimal fields to numbers for client-side compatibility
+        const plainBill = {
+            ...newBill,
+            discount: newBill.discount.toNumber(), // Convert Decimal to number
+            items: newBill.items.map(item => ({
+                ...item,
+                quantity: item.quantity.toNumber(), // Convert Decimal to number
+                rate: item.rate.toNumber(),         // Convert Decimal to number
+            }))
+        };
+
         return { 
             success: "Bill saved successfully!",
-            data: { bill: newBill, company: company || {}, totals } 
+            data: { bill: plainBill, company: company || {}, totals } 
         };
     } catch (error) {
         console.error("Failed to create bill:", error);
