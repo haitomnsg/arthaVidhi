@@ -4,7 +4,6 @@ import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer
 import { format } from 'date-fns';
 import type { Company } from '@prisma/client';
 
-// Define a local version of the form values type to avoid dependency loops
 type BillFormValues = {
   clientName: string;
   clientAddress: string;
@@ -124,11 +123,6 @@ const pdfStyles = StyleSheet.create({
     borderColor: '#F2E0D1',
     borderLeftWidth: 0,
     borderTopWidth: 0,
-  },
-  tableColHeader: {
-    padding: 5,
-    fontWeight: 'bold',
-    fontSize: 10,
   },
   tableColHeaderDesc: { width: '40%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'left'},
   tableColHeaderQty: { width: '10%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'right'},
@@ -286,14 +280,48 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
 };
 
 
-export const generateAndDownloadPdf = async (data: PDFData) => {
+export const generateAndDownloadPdf = async (data: PDFData): Promise<boolean> => {
+    const safeData: PDFData = {
+        invoiceNumber: String(data.invoiceNumber || 'INV-0000'),
+        appliedDiscountLabel: String(data.appliedDiscountLabel || 'Discount'),
+        subtotal: Number(data.subtotal || 0),
+        discount: Number(data.discount || 0),
+        vat: Number(data.vat || 0),
+        total: Number(data.total || 0),
+        company: {
+            name: String(data.company?.name || 'Your Company'),
+            address: String(data.company?.address || ''),
+            phone: String(data.company?.phone || ''),
+            email: String(data.company?.email || ''),
+            panNumber: String(data.company?.panNumber || ''),
+            vatNumber: String(data.company?.vatNumber || ''),
+        },
+        bill: {
+            clientName: String(data.bill?.clientName || 'Client Name'),
+            clientAddress: String(data.bill?.clientAddress || ''),
+            clientPhone: String(data.bill?.clientPhone || ''),
+            panNumber: String(data.bill?.panNumber || ''),
+            billDate: data.bill?.billDate instanceof Date ? data.bill.billDate : new Date(),
+            dueDate: data.bill?.dueDate instanceof Date ? data.bill.dueDate : new Date(),
+            discountType: data.bill?.discountType || 'amount',
+            discountAmount: Number(data.bill?.discountAmount || 0),
+            discountPercentage: Number(data.bill?.discountPercentage || 0),
+            items: (data.bill?.items || []).map(item => ({
+                description: String(item.description || ''),
+                quantity: Number(item.quantity || 0),
+                unit: String(item.unit || ''),
+                rate: Number(item.rate || 0),
+            })),
+        }
+    };
+
     try {
-        const doc = <BillPDFDocument {...data} />;
+        const doc = <BillPDFDocument {...safeData} />;
         const blob = await pdf(doc).toBlob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${data.invoiceNumber}.pdf`;
+        link.download = `${safeData.invoiceNumber}.pdf`;
         document.body.appendChild(link);
         link.click();
         
@@ -301,9 +329,11 @@ export const generateAndDownloadPdf = async (data: PDFData) => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         }, 100);
+        return true;
 
     } catch (error) {
         console.error("Error generating PDF: ", error);
         alert("Failed to generate PDF. Please try again.");
+        return false;
     }
 };

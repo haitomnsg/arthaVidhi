@@ -102,10 +102,7 @@ export default function CreateBillPage() {
     name: "items",
   });
 
-  const watchedItems = form.watch("items");
-  const discountType = form.watch("discountType");
-  const discountAmount = form.watch("discountAmount");
-  const discountPercentage = form.watch("discountPercentage");
+  const billData = form.watch();
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
@@ -122,7 +119,9 @@ export default function CreateBillPage() {
 
 
   const { subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = useMemo(() => {
-    const calculatedSubtotal = (watchedItems || []).reduce((acc, item) => {
+    const { items, discountType, discountAmount, discountPercentage } = billData;
+
+    const calculatedSubtotal = (items || []).reduce((acc, item) => {
       const quantity = Number(item.quantity) || 0;
       const rate = Number(item.rate) || 0;
       return acc + quantity * rate;
@@ -153,42 +152,47 @@ export default function CreateBillPage() {
       total: calculatedTotal,
       appliedDiscountLabel: label,
     };
-  }, [watchedItems, discountType, discountAmount, discountPercentage]);
+  }, [billData]);
 
 
   const onSubmit = (values: BillFormValues) => {
-    startTransition(() => {
-        createBill(values).then((data) => {
-            if (data.error) {
-                toast({
-                    title: "Error",
-                    description: data.error,
-                    variant: "destructive",
-                });
-            }
-            if (data.success && data.bill) {
-                toast({
-                    title: "Bill Created",
-                    description: "Your PDF will download automatically.",
-                });
-                const pdfData: PDFData = {
-                    bill: values,
-                    company: companyDetails,
-                    subtotal,
-                    discount,
-                    vat,
-                    total,
-                    invoiceNumber: data.bill.invoiceNumber,
-                    appliedDiscountLabel: appliedDiscountLabel,
-                };
-                generateAndDownloadPdf(pdfData);
-                form.reset(defaultFormValues);
-            }
+    startTransition(async () => {
+      const serverResponse = await createBill(values);
+      
+      if (serverResponse.error) {
+        toast({
+          title: "Error",
+          description: serverResponse.error,
+          variant: "destructive",
         });
+        return;
+      }
+      
+      if (serverResponse.success && serverResponse.bill) {
+        toast({
+          title: "Bill Created",
+          description: "Your PDF will download automatically.",
+        });
+
+        const pdfData: PDFData = {
+          bill: values,
+          company: companyDetails,
+          subtotal,
+          discount,
+          vat,
+          total,
+          invoiceNumber: serverResponse.bill.invoiceNumber,
+          appliedDiscountLabel: appliedDiscountLabel,
+        };
+
+        const pdfSuccess = await generateAndDownloadPdf(pdfData);
+        
+        if (pdfSuccess) {
+          form.reset(defaultFormValues);
+        }
+      }
     });
   };
-
-  const billData = form.watch();
 
   return (
     <>
@@ -307,7 +311,7 @@ export default function CreateBillPage() {
                                             type="number"
                                             {...field}
                                             placeholder="e.g. 100"
-                                            disabled={discountType === 'percentage'}
+                                            disabled={billData.discountType === 'percentage'}
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -325,7 +329,7 @@ export default function CreateBillPage() {
                                             type="number"
                                             {...field}
                                             placeholder="e.g. 10"
-                                            disabled={discountType === 'amount'}
+                                            disabled={billData.discountType === 'amount'}
                                         />
                                     </FormControl>
                                     <FormMessage />
