@@ -2,7 +2,7 @@
 
 import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
-import type { BillPDFData as PDFData } from '@/app/actions/bills';
+import type { BillPDFData as PDFData, BillPDFData } from '@/app/actions/bills';
 
 const pdfStyles = StyleSheet.create({
   page: {
@@ -167,8 +167,8 @@ const pdfStyles = StyleSheet.create({
 
 const BillPDFDocument = ({ data }: { data: PDFData }) => {
     const { bill, company, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = data;
-    const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
-    const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
+    const formattedDate = bill.billDate ? format(new Date(bill.billDate), "PPP") : 'N/A';
+    const formattedDueDate = bill.dueDate ? format(new Date(bill.dueDate), "PPP") : formattedDate;
 
     return (
         <Document>
@@ -176,7 +176,7 @@ const BillPDFDocument = ({ data }: { data: PDFData }) => {
                 <View style={pdfStyles.header}>
                     <View style={pdfStyles.companyDetails}>
                         <Text style={pdfStyles.companyName}>{company.name}</Text>
-                        <Text style={pdfStyles.companyInfo}>{company.address}</Text>
+                        <Text style={pdfStyles.companyInfo}>{company.address || ''}</Text>
                         <Text style={pdfStyles.companyInfo}>{`Phone: ${company.phone || "N/A"} | Email: ${company.email || "N/A"}`}</Text>
                         <Text style={pdfStyles.companyInfo}>{`PAN: ${company.panNumber || "N/A"}${company.vatNumber ? ` | VAT: ${company.vatNumber}` : ''}`}</Text>
                     </View>
@@ -250,15 +250,57 @@ const BillPDFDocument = ({ data }: { data: PDFData }) => {
     )
 };
 
+export const generateAndDownloadPdf = async (data: PDFData | null): Promise<boolean> => {
+    if (!data || !data.bill || !data.company) {
+        console.error("Error generating PDF: Invalid or incomplete data provided.", data);
+        alert("Failed to generate PDF due to missing data. Please check bill and company details.");
+        return false;
+    }
 
-export const generateAndDownloadPdf = async (data: PDFData): Promise<boolean> => {
+    // Deep data sanitization to create a guaranteed-safe object for the PDF renderer.
+    const safeData: PDFData = {
+        bill: {
+            invoiceNumber: data.bill.invoiceNumber || 'N/A',
+            clientName: data.bill.clientName || 'N/A',
+            clientAddress: data.bill.clientAddress || 'N/A',
+            clientPhone: data.bill.clientPhone || 'N/A',
+            clientPanNumber: data.bill.clientPanNumber || null,
+            billDate: data.bill.billDate || new Date(),
+            dueDate: data.bill.dueDate || new Date(),
+            items: Array.isArray(data.bill.items) ? data.bill.items.map(item => ({
+                description: item.description || '',
+                quantity: Number(item.quantity) || 0,
+                unit: item.unit || '',
+                rate: Number(item.rate) || 0,
+            })) : [],
+        },
+        company: {
+            id: data.company.id || 0,
+            userId: data.company.userId || 0,
+            name: data.company.name || "Your Company Name",
+            address: data.company.address || "123 Business Rd, Kathmandu",
+            phone: data.company.phone || "9876543210",
+            email: data.company.email || "contact@company.com",
+            panNumber: data.company.panNumber || "123456789",
+            vatNumber: data.company.vatNumber || "987654321",
+            createdAt: data.company.createdAt || new Date(),
+            updatedAt: data.company.updatedAt || new Date(),
+        },
+        subtotal: Number(data.subtotal) || 0,
+        discount: Number(data.discount) || 0,
+        subtotalAfterDiscount: Number(data.subtotalAfterDiscount) || 0,
+        vat: Number(data.vat) || 0,
+        total: Number(data.total) || 0,
+        appliedDiscountLabel: data.appliedDiscountLabel || 'Discount',
+    };
+
     try {
-        const doc = <BillPDFDocument data={data} />;
+        const doc = <BillPDFDocument data={safeData} />;
         const blob = await pdf(doc).toBlob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${data.bill.invoiceNumber}.pdf`;
+        link.download = `${safeData.bill.invoiceNumber}.pdf`;
         document.body.appendChild(link);
         link.click();
         
