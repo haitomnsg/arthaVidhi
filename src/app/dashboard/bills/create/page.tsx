@@ -8,7 +8,8 @@ import * as z from "zod";
 import {
   CalendarIcon,
   PlusCircle,
-  Download,
+  Save,
+  FileDown,
   X,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -44,9 +45,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
-import { createBill, type BillPDFData } from "@/app/actions/bills";
+import { createBill } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
-import { generateAndDownloadPdf } from "@/components/bill-pdf-download";
+import { downloadTestPdf } from "@/components/bill-pdf-download";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -87,7 +88,6 @@ export default function CreateBillPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [companyDetails, setCompanyDetails] = useState<Partial<Company>>({});
-  const [pdfData, setPdfData] = useState<BillPDFData | null>(null);
 
   useEffect(() => {
     getCompanyDetails().then(setCompanyDetails);
@@ -167,29 +167,15 @@ export default function CreateBillPage() {
         return;
       }
       
-      if (serverResponse.success && serverResponse.data) {
+      if (serverResponse.success) {
         toast({
-          title: "Bill Created",
-          description: "Your PDF will download automatically.",
+          title: "Bill Saved",
+          description: serverResponse.success,
         });
-        setPdfData(serverResponse.data);
+        form.reset(defaultFormValues);
       }
     });
   };
-
-  useEffect(() => {
-    if (pdfData) {
-      const downloadAndReset = async () => {
-        const success = await generateAndDownloadPdf(pdfData);
-        if (success) {
-          form.reset(defaultFormValues);
-        }
-        // Clear the data to prevent re-downloads on re-render
-        setPdfData(null);
-      };
-      downloadAndReset();
-    }
-  }, [pdfData, form]);
 
   return (
     <>
@@ -199,7 +185,7 @@ export default function CreateBillPage() {
             <CardHeader>
               <CardTitle>Create a New Bill</CardTitle>
               <CardDescription>
-                Fill in the details below to generate a new bill.
+                Fill in the details below to save a new bill.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -338,9 +324,12 @@ export default function CreateBillPage() {
                 </form>
               </Form>
             </CardContent>
-             <CardFooter>
+             <CardFooter className="flex-col items-start gap-4">
                <Button type="submit" form="bill-form" disabled={isPending || !form.formState.isValid} size="lg">
-                 {isPending ? "Saving..." : <><Download className="mr-2 h-4 w-4" /> Create Bill & Download</>}
+                 {isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Bill</>}
+               </Button>
+               <Button variant="outline" onClick={downloadTestPdf} size="sm">
+                  <FileDown className="mr-2 h-4 w-4" /> Download Test PDF
                </Button>
              </CardFooter>
           </Card>
@@ -432,7 +421,7 @@ function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount,
             </tr>
           </thead>
           <tbody>
-            {(bill.items && bill.items.length > 0 && (bill.items[0].description || bill.items[0].rate > 0)) ? bill.items.map((item, index) => (
+            {(bill.items && bill.items.length > 0 && (bill.items[0].description || (bill.items[0].rate || 0) > 0)) ? bill.items.map((item, index) => (
               <tr key={index} className="border-b">
                 <td className="p-3">{item.description}</td>
                 <td className="p-3 text-center">{item.quantity}</td>

@@ -1,318 +1,47 @@
 'use client';
 
 import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { format } from 'date-fns';
-import type { BillPDFData as PDFData, BillPDFData } from '@/app/actions/bills';
 
-const pdfStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   page: {
-    fontFamily: 'Helvetica',
-    fontSize: 11,
-    padding: 30,
-    flexDirection: 'column',
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF'
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 30,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FF8703',
-  },
-  companyDetails: {
-    flexDirection: 'column',
-    flexShrink: 1,
-  },
-  companyName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF8703',
-  },
-  companyInfo: {
-    fontSize: 10,
-    color: '#4A4A4A'
-  },
-  invoiceTitleSection: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-  },
-  invoiceTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FF8703',
-  },
-  invoiceNumber: {
-    fontSize: 10,
-    color: '#4A4A4A',
-  },
-  billDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 30,
-  },
-  billTo: {
-    flexDirection: 'column',
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#333'
-  },
-  clientName: {
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  clientInfo: {
-    fontSize: 10,
-    color: '#4A4A4A',
-  },
-  dates: {
-    flexDirection: 'column',
-    alignItems: 'flex-end'
-  },
-  dateText: {
-    fontSize: 10,
-  },
-  table: {
-    display: "flex",
-    width: "auto",
-    borderStyle: "solid",
-    borderWidth: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0
-  },
-  tableRow: {
-    margin: "auto",
-    flexDirection: "row"
-  },
-  tableHeader: {
-    backgroundColor: '#F2E0D1',
-    borderStyle: "solid",
-    borderWidth: 1,
-    borderColor: '#F2E0D1',
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-  },
-  tableColHeaderDesc: { width: '40%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'left'},
-  tableColHeaderQty: { width: '10%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'right'},
-  tableColHeaderUnit: { width: '10%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'right'},
-  tableColHeaderRate: { width: '20%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'right'},
-  tableColHeaderAmount: { width: '20%', padding: 5, fontWeight: 'bold', fontSize: 10, textAlign: 'right'},
-  tableCell: {
-    padding: 5,
-    fontSize: 10,
-  },
-  tableCellDesc: { width: '40%', textAlign: 'left' },
-  tableCellQty: { width: '10%', textAlign: 'right' },
-  tableCellUnit: { width: '10%', textAlign: 'right' },
-  tableCellRate: { width: '20%', textAlign: 'right' },
-  tableCellAmount: { width: '20%', textAlign: 'right' },
-  tableBodyRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE'
-  },
-  summary: {
-    marginTop: 30,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  summaryContainer: {
-    width: '40%',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  summaryLabel: {
-    fontSize: 10,
-    color: '#4A4A4A',
-  },
-  summaryValue: {
-    fontSize: 10,
-    textAlign: 'right',
-  },
-  summaryTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    marginTop: 5,
-  },
-  summaryTotalLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#FF8703'
-  },
-  summaryTotalValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#FF8703',
-    textAlign: 'right',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
-    right: 30,
-    textAlign: 'center',
-    fontSize: 9,
-    color: '#888888',
+  section: {
+    margin: 10,
+    padding: 10,
+    flexGrow: 1
   }
 });
 
+const MyDocument = () => (
+  <Document>
+    <Page size="A4" style={styles.page}>
+      <View style={styles.section}>
+        <Text>Hello World!</Text>
+      </View>
+    </Page>
+  </Document>
+);
 
-const BillPDFDocument = ({ data }: { data: PDFData }) => {
-    const { bill, company, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = data;
-    const formattedDate = bill.billDate ? format(new Date(bill.billDate), "PPP") : 'N/A';
-    const formattedDueDate = bill.dueDate ? format(new Date(bill.dueDate), "PPP") : formattedDate;
+export const downloadTestPdf = async () => {
+  try {
+    const doc = <MyDocument />;
+    const blob = await pdf(doc).toBlob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'hello-world.pdf';
+    document.body.appendChild(link);
+    link.click();
+    
+    setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, 100);
 
-    return (
-        <Document>
-            <Page size="A4" style={pdfStyles.page}>
-                <View style={pdfStyles.header}>
-                    <View style={pdfStyles.companyDetails}>
-                        <Text style={pdfStyles.companyName}>{company.name}</Text>
-                        <Text style={pdfStyles.companyInfo}>{company.address || ''}</Text>
-                        <Text style={pdfStyles.companyInfo}>{`Phone: ${company.phone || "N/A"} | Email: ${company.email || "N/A"}`}</Text>
-                        <Text style={pdfStyles.companyInfo}>{`PAN: ${company.panNumber || "N/A"}${company.vatNumber ? ` | VAT: ${company.vatNumber}` : ''}`}</Text>
-                    </View>
-                    <View style={pdfStyles.invoiceTitleSection}>
-                        <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
-                        <Text style={pdfStyles.invoiceNumber}>{`#${bill.invoiceNumber}`}</Text>
-                    </View>
-                </View>
-
-                <View style={pdfStyles.billDetails}>
-                    <View style={pdfStyles.billTo}>
-                        <Text style={pdfStyles.sectionTitle}>Bill To:</Text>
-                        <Text style={pdfStyles.clientName}>{bill.clientName}</Text>
-                        <Text style={pdfStyles.clientInfo}>{bill.clientAddress}</Text>
-                        <Text style={pdfStyles.clientInfo}>{bill.clientPhone}</Text>
-                        {bill.clientPanNumber ? <Text style={pdfStyles.clientInfo}>{`PAN: ${bill.clientPanNumber}`}</Text> : null}
-                    </View>
-                    <View style={pdfStyles.dates}>
-                        <Text style={pdfStyles.dateText}>{`Bill Date: ${formattedDate}`}</Text>
-                        <Text style={pdfStyles.dateText}>{`Due Date: ${formattedDueDate}`}</Text>
-                    </View>
-                </View>
-
-                <View style={pdfStyles.table}>
-                    <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
-                        <Text style={pdfStyles.tableColHeaderDesc}>Description</Text>
-                        <Text style={pdfStyles.tableColHeaderQty}>Qty</Text>
-                        <Text style={pdfStyles.tableColHeaderUnit}>Unit</Text>
-                        <Text style={pdfStyles.tableColHeaderRate}>Rate (Rs.)</Text>
-                        <Text style={pdfStyles.tableColHeaderAmount}>Amount (Rs.)</Text>
-                    </View>
-                    {bill.items.map((item, index) => (
-                        <View key={index} style={[pdfStyles.tableRow, pdfStyles.tableBodyRow]}>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellDesc]}>{item.description}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellQty]}>{item.quantity}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellUnit]}>{item.unit}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellRate]}>{(item.rate || 0).toFixed(2)}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellAmount]}>{((item.quantity || 0) * (item.rate || 0)).toFixed(2)}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                <View style={pdfStyles.summary}>
-                    <View style={pdfStyles.summaryContainer}>
-                        <View style={pdfStyles.summaryRow}>
-                            <Text style={pdfStyles.summaryLabel}>Subtotal</Text>
-                            <Text style={pdfStyles.summaryValue}>{`Rs. ${subtotal.toFixed(2)}`}</Text>
-                        </View>
-                        <View style={pdfStyles.summaryRow}>
-                            <Text style={pdfStyles.summaryLabel}>{appliedDiscountLabel}</Text>
-                            <Text style={pdfStyles.summaryValue}>{`- Rs. ${discount.toFixed(2)}`}</Text>
-                        </View>
-                        <View style={pdfStyles.summaryRow}>
-                            <Text style={pdfStyles.summaryLabel}>Subtotal after Discount</Text>
-                            <Text style={pdfStyles.summaryValue}>{`Rs. ${subtotalAfterDiscount.toFixed(2)}`}</Text>
-                        </View>
-                        <View style={pdfStyles.summaryRow}>
-                            <Text style={pdfStyles.summaryLabel}>VAT (13%)</Text>
-                            <Text style={pdfStyles.summaryValue}>{`Rs. ${vat.toFixed(2)}`}</Text>
-                        </View>
-                        <View style={pdfStyles.summaryTotalRow}>
-                            <Text style={pdfStyles.summaryTotalLabel}>Total</Text>
-                            <Text style={pdfStyles.summaryTotalValue}>{`Rs. ${total.toFixed(2)}`}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                <Text style={pdfStyles.footer}>Thank you for your business! | ArthaVidhi by Haitomns Groups</Text>
-            </Page>
-        </Document>
-    )
-};
-
-export const generateAndDownloadPdf = async (data: PDFData | null): Promise<boolean> => {
-    if (!data || !data.bill || !data.company) {
-        console.error("Error generating PDF: Invalid or incomplete data provided.", data);
-        alert("Failed to generate PDF due to missing data. Please check bill and company details.");
-        return false;
-    }
-
-    // Deep data sanitization to create a guaranteed-safe object for the PDF renderer.
-    const safeData: PDFData = {
-        bill: {
-            invoiceNumber: data.bill.invoiceNumber || 'N/A',
-            clientName: data.bill.clientName || 'N/A',
-            clientAddress: data.bill.clientAddress || 'N/A',
-            clientPhone: data.bill.clientPhone || 'N/A',
-            clientPanNumber: data.bill.clientPanNumber || null,
-            billDate: data.bill.billDate || new Date(),
-            dueDate: data.bill.dueDate || new Date(),
-            items: Array.isArray(data.bill.items) ? data.bill.items.map(item => ({
-                description: item.description || '',
-                quantity: Number(item.quantity) || 0,
-                unit: item.unit || '',
-                rate: Number(item.rate) || 0,
-            })) : [],
-        },
-        company: {
-            id: data.company.id || 0,
-            userId: data.company.userId || 0,
-            name: data.company.name || "Your Company Name",
-            address: data.company.address || "123 Business Rd, Kathmandu",
-            phone: data.company.phone || "9876543210",
-            email: data.company.email || "contact@company.com",
-            panNumber: data.company.panNumber || "123456789",
-            vatNumber: data.company.vatNumber || "987654321",
-            createdAt: data.company.createdAt || new Date(),
-            updatedAt: data.company.updatedAt || new Date(),
-        },
-        subtotal: Number(data.subtotal) || 0,
-        discount: Number(data.discount) || 0,
-        subtotalAfterDiscount: Number(data.subtotalAfterDiscount) || 0,
-        vat: Number(data.vat) || 0,
-        total: Number(data.total) || 0,
-        appliedDiscountLabel: data.appliedDiscountLabel || 'Discount',
-    };
-
-    try {
-        const doc = <BillPDFDocument data={safeData} />;
-        const blob = await pdf(doc).toBlob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${safeData.bill.invoiceNumber}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
-        return true;
-
-    } catch (error) {
-        console.error("Error generating PDF: ", error);
-        alert("Failed to generate PDF. Please try again.");
-        return false;
-    }
+  } catch (error) {
+    console.error("Error generating test PDF: ", error);
+    alert("Failed to generate test PDF.");
+  }
 };
