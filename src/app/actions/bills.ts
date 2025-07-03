@@ -66,6 +66,7 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
         discountType,
         discountPercentage,
         discountAmount,
+        panNumber, // Destructure panNumber here to separate it from the rest
         ...billDetails
     } = validatedFields.data;
 
@@ -107,8 +108,8 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
 
             const createdBill = await tx.bill.create({
                 data: {
-                    ...billDetails,
-                    clientPanNumber: billDetails.panNumber,
+                    ...billDetails, // Contains clientName, clientAddress, etc.
+                    clientPanNumber: panNumber, // Correctly map panNumber to the expected field
                     invoiceNumber,
                     discount: finalDiscount,
                     status: 'Pending',
@@ -146,7 +147,7 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
                 clientName: billDetails.clientName,
                 clientAddress: billDetails.clientAddress,
                 clientPhone: billDetails.clientPhone,
-                clientPanNumber: billDetails.panNumber || null,
+                clientPanNumber: panNumber || null,
                 billDate: billDetails.billDate,
                 dueDate: billDetails.dueDate,
                 items: items,
