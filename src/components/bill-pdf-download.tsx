@@ -2,36 +2,7 @@
 
 import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
-import type { Company } from '@prisma/client';
-
-type BillFormValues = {
-  clientName: string;
-  clientAddress: string;
-  clientPhone: string;
-  panNumber?: string;
-  billDate: Date;
-  dueDate: Date;
-  items: {
-    description: string;
-    quantity: number;
-    unit: string;
-    rate: number;
-  }[];
-  discountType: 'percentage' | 'amount';
-  discountPercentage?: number;
-  discountAmount?: number;
-};
-
-export interface PDFData {
-    bill: BillFormValues;
-    company: Partial<Company>;
-    subtotal: number;
-    discount: number;
-    vat: number;
-    total: number;
-    invoiceNumber: string;
-    appliedDiscountLabel: string;
-}
+import type { BillPDFData as PDFData } from '@/app/actions/bills';
 
 const pdfStyles = StyleSheet.create({
   page: {
@@ -194,34 +165,34 @@ const pdfStyles = StyleSheet.create({
 });
 
 
-const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoiceNumber, appliedDiscountLabel }: PDFData) => {
+const BillPDFDocument = ({ data }: { data: PDFData }) => {
+    const { bill, company, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = data;
     const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
     const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
-    const subtotalAfterDiscount = subtotal - discount;
 
     return (
         <Document>
             <Page size="A4" style={pdfStyles.page}>
                 <View style={pdfStyles.header}>
                     <View style={pdfStyles.companyDetails}>
-                        <Text style={pdfStyles.companyName}>{String(company.name || "Your Company Name")}</Text>
-                        <Text style={pdfStyles.companyInfo}>{String(company.address || "123 Business Rd, Kathmandu")}</Text>
-                        <Text style={pdfStyles.companyInfo}>{`Phone: ${String(company.phone || "N/A")} | Email: ${String(company.email || "N/A")}`}</Text>
-                        <Text style={pdfStyles.companyInfo}>{`PAN: ${String(company.panNumber || "N/A")}${company.vatNumber ? ` | VAT: ${company.vatNumber}` : ''}`}</Text>
+                        <Text style={pdfStyles.companyName}>{company.name}</Text>
+                        <Text style={pdfStyles.companyInfo}>{company.address}</Text>
+                        <Text style={pdfStyles.companyInfo}>{`Phone: ${company.phone || "N/A"} | Email: ${company.email || "N/A"}`}</Text>
+                        <Text style={pdfStyles.companyInfo}>{`PAN: ${company.panNumber || "N/A"}${company.vatNumber ? ` | VAT: ${company.vatNumber}` : ''}`}</Text>
                     </View>
                     <View style={pdfStyles.invoiceTitleSection}>
                         <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
-                        <Text style={pdfStyles.invoiceNumber}>{`#${String(invoiceNumber || 'INV-000')}`}</Text>
+                        <Text style={pdfStyles.invoiceNumber}>{`#${bill.invoiceNumber}`}</Text>
                     </View>
                 </View>
 
                 <View style={pdfStyles.billDetails}>
                     <View style={pdfStyles.billTo}>
                         <Text style={pdfStyles.sectionTitle}>Bill To:</Text>
-                        <Text style={pdfStyles.clientName}>{String(bill.clientName || 'Client Name')}</Text>
-                        <Text style={pdfStyles.clientInfo}>{String(bill.clientAddress || 'Client Address')}</Text>
-                        <Text style={pdfStyles.clientInfo}>{String(bill.clientPhone || 'Client Phone')}</Text>
-                        {bill.panNumber ? <Text style={pdfStyles.clientInfo}>{`PAN: ${bill.panNumber}`}</Text> : null}
+                        <Text style={pdfStyles.clientName}>{bill.clientName}</Text>
+                        <Text style={pdfStyles.clientInfo}>{bill.clientAddress}</Text>
+                        <Text style={pdfStyles.clientInfo}>{bill.clientPhone}</Text>
+                        {bill.clientPanNumber ? <Text style={pdfStyles.clientInfo}>{`PAN: ${bill.clientPanNumber}`}</Text> : null}
                     </View>
                     <View style={pdfStyles.dates}>
                         <Text style={pdfStyles.dateText}>{`Bill Date: ${formattedDate}`}</Text>
@@ -237,13 +208,13 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
                         <Text style={pdfStyles.tableColHeaderRate}>Rate (Rs.)</Text>
                         <Text style={pdfStyles.tableColHeaderAmount}>Amount (Rs.)</Text>
                     </View>
-                    {(bill.items || []).map((item, index) => (
+                    {bill.items.map((item, index) => (
                         <View key={index} style={[pdfStyles.tableRow, pdfStyles.tableBodyRow]}>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellDesc]}>{String(item.description || '')}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellQty]}>{String(item.quantity || 0)}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellUnit]}>{String(item.unit || '')}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellRate]}>{(Number(item.rate) || 0).toFixed(2)}</Text>
-                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellAmount]}>{((Number(item.quantity) || 0) * (Number(item.rate) || 0)).toFixed(2)}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellDesc]}>{item.description}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellQty]}>{item.quantity}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellUnit]}>{item.unit}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellRate]}>{(item.rate || 0).toFixed(2)}</Text>
+                            <Text style={[pdfStyles.tableCell, pdfStyles.tableCellAmount]}>{((item.quantity || 0) * (item.rate || 0)).toFixed(2)}</Text>
                         </View>
                     ))}
                 </View>
@@ -281,47 +252,13 @@ const BillPDFDocument = ({ bill, company, subtotal, discount, vat, total, invoic
 
 
 export const generateAndDownloadPdf = async (data: PDFData): Promise<boolean> => {
-    const safeData: PDFData = {
-        invoiceNumber: String(data.invoiceNumber || 'INV-0000'),
-        appliedDiscountLabel: String(data.appliedDiscountLabel || 'Discount'),
-        subtotal: Number(data.subtotal || 0),
-        discount: Number(data.discount || 0),
-        vat: Number(data.vat || 0),
-        total: Number(data.total || 0),
-        company: {
-            name: String(data.company?.name || 'Your Company'),
-            address: String(data.company?.address || ''),
-            phone: String(data.company?.phone || ''),
-            email: String(data.company?.email || ''),
-            panNumber: String(data.company?.panNumber || ''),
-            vatNumber: String(data.company?.vatNumber || ''),
-        },
-        bill: {
-            clientName: String(data.bill?.clientName || 'Client Name'),
-            clientAddress: String(data.bill?.clientAddress || ''),
-            clientPhone: String(data.bill?.clientPhone || ''),
-            panNumber: String(data.bill?.panNumber || ''),
-            billDate: data.bill?.billDate instanceof Date ? data.bill.billDate : new Date(),
-            dueDate: data.bill?.dueDate instanceof Date ? data.bill.dueDate : new Date(),
-            discountType: data.bill?.discountType || 'amount',
-            discountAmount: Number(data.bill?.discountAmount || 0),
-            discountPercentage: Number(data.bill?.discountPercentage || 0),
-            items: (data.bill?.items || []).map(item => ({
-                description: String(item.description || ''),
-                quantity: Number(item.quantity || 0),
-                unit: String(item.unit || ''),
-                rate: Number(item.rate || 0),
-            })),
-        }
-    };
-
     try {
-        const doc = <BillPDFDocument {...safeData} />;
+        const doc = <BillPDFDocument data={data} />;
         const blob = await pdf(doc).toBlob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${safeData.invoiceNumber}.pdf`;
+        link.download = `${data.bill.invoiceNumber}.pdf`;
         document.body.appendChild(link);
         link.click();
         

@@ -44,9 +44,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
-import { createBill } from "@/app/actions/bills";
+import { createBill, type BillPDFData } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
-import { generateAndDownloadPdf, type PDFData } from "@/components/bill-pdf-download";
+import { generateAndDownloadPdf } from "@/components/bill-pdf-download";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -87,7 +87,8 @@ export default function CreateBillPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [companyDetails, setCompanyDetails] = useState<Partial<Company>>({});
-  
+  const [pdfData, setPdfData] = useState<BillPDFData | null>(null);
+
   useEffect(() => {
     getCompanyDetails().then(setCompanyDetails);
   }, []);
@@ -116,7 +117,6 @@ export default function CreateBillPage() {
     });
     return () => subscription.unsubscribe();
   }, [form]);
-
 
   const { subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel } = useMemo(() => {
     const { items, discountType, discountAmount, discountPercentage } = billData;
@@ -154,7 +154,6 @@ export default function CreateBillPage() {
     };
   }, [billData]);
 
-
   const onSubmit = (values: BillFormValues) => {
     startTransition(async () => {
       const serverResponse = await createBill(values);
@@ -168,36 +167,34 @@ export default function CreateBillPage() {
         return;
       }
       
-      if (serverResponse.success && serverResponse.bill) {
+      if (serverResponse.success && serverResponse.data) {
         toast({
           title: "Bill Created",
           description: "Your PDF will download automatically.",
         });
-
-        const pdfData: PDFData = {
-          bill: values,
-          company: companyDetails,
-          subtotal,
-          discount,
-          vat,
-          total,
-          invoiceNumber: serverResponse.bill.invoiceNumber,
-          appliedDiscountLabel: appliedDiscountLabel,
-        };
-
-        const pdfSuccess = await generateAndDownloadPdf(pdfData);
-        
-        if (pdfSuccess) {
-          form.reset(defaultFormValues);
-        }
+        setPdfData(serverResponse.data);
       }
     });
   };
 
+  useEffect(() => {
+    if (pdfData) {
+      const downloadAndReset = async () => {
+        const success = await generateAndDownloadPdf(pdfData);
+        if (success) {
+          form.reset(defaultFormValues);
+        }
+        // Clear the data to prevent re-downloads on re-render
+        setPdfData(null);
+      };
+      downloadAndReset();
+    }
+  }, [pdfData, form]);
+
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:block">
+        <div className="min-w-0 print:hidden">
           <Card>
             <CardHeader>
               <CardTitle>Create a New Bill</CardTitle>

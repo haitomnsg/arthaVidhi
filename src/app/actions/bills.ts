@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/db';
 import * as z from 'zod';
+import type { Company } from '@prisma/client';
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -25,7 +26,35 @@ const billFormSchema = z.object({
 
 type BillFormValues = z.infer<typeof billFormSchema>;
 
-export const createBill = async (values: BillFormValues) => {
+// Define a type for the data package that will be sent to the client.
+// This ensures all data is serializable (e.g., no Decimal types).
+export interface BillPDFData {
+    bill: {
+        invoiceNumber: string;
+        clientName: string;
+        clientAddress: string;
+        clientPhone: string;
+        clientPanNumber: string | null;
+        billDate: Date;
+        dueDate: Date;
+        items: {
+            description: string;
+            quantity: number;
+            unit: string;
+            rate: number;
+        }[];
+    };
+    company: Company;
+    subtotal: number;
+    discount: number;
+    subtotalAfterDiscount: number;
+    vat: number;
+    total: number;
+    appliedDiscountLabel: string;
+}
+
+
+export const createBill = async (values: BillFormValues): Promise<{ success?: string; error?: string; data?: BillPDFData }> => {
     const validatedFields = billFormSchema.safeParse(values);
 
     if (!validatedFields.success) {
@@ -33,33 +62,36 @@ export const createBill = async (values: BillFormValues) => {
     }
 
     const {
-        clientName,
-        clientAddress,
-        clientPhone,
-        panNumber,
-        billDate,
-        dueDate,
         items,
         discountType,
         discountPercentage,
         discountAmount,
+        ...billDetails
     } = validatedFields.data;
 
-    // TODO: This is a placeholder. We need to implement session management
-    // to get the ID of the currently logged-in user.
     const userId = 1;
-    
+
+    // --- Server-side calculations ---
     const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
     
     let finalDiscount = 0;
+    let appliedDiscountLabel = 'Discount';
     if (discountType === 'percentage') {
-        finalDiscount = subtotal * ((discountPercentage || 0) / 100);
+        const percentage = discountPercentage || 0;
+        finalDiscount = subtotal * (percentage / 100);
+        if (percentage > 0) {
+            appliedDiscountLabel = `Discount (${percentage}%)`;
+        }
     } else {
         finalDiscount = discountAmount || 0;
     }
 
+    const subtotalAfterDiscount = subtotal - finalDiscount;
+    const vat = subtotalAfterDiscount * 0.13;
+    const total = subtotalAfterDiscount + vat;
 
     try {
+        // Use a transaction to ensure atomicity
         const newBill = await prisma.$transaction(async (tx) => {
             const lastBill = await tx.bill.findFirst({
                 orderBy: { id: 'desc' }
@@ -75,40 +107,60 @@ export const createBill = async (values: BillFormValues) => {
 
             const createdBill = await tx.bill.create({
                 data: {
+                    ...billDetails,
+                    clientPanNumber: billDetails.panNumber,
                     invoiceNumber,
-                    clientName,
-                    clientAddress,
-                    clientPhone,
-                    clientPanNumber: panNumber,
-                    billDate,
-                    dueDate,
                     discount: finalDiscount,
-                    status: 'Pending', // Default status
-                    user: {
-                        connect: { id: userId }
-                    }
+                    status: 'Pending',
+                    userId: userId,
                 }
             });
 
-            const billItems = items.map(item => ({
+            const billItemsData = items.map(item => ({
                 ...item,
                 billId: createdBill.id
             }));
 
             await tx.billItem.createMany({
-                data: billItems
+                data: billItemsData
             });
 
-            return createdBill;
+            return { ...createdBill, items: billItemsData };
         });
 
-        const serializableBill = {
-            ...newBill,
-            discount: newBill.discount.toNumber(),
+        // Fetch company details
+        const companyDetails = await prisma.company.findUnique({
+            where: { userId },
+        });
+
+        const safeCompanyDetails = companyDetails || {
+            id: 0, userId, name: "Your Company Name", address: "123 Business Rd, Kathmandu",
+            phone: "9876543210", email: "contact@company.com", panNumber: "123456789",
+            vatNumber: "987654321", createdAt: new Date(), updatedAt: new Date(),
         };
 
+        // Assemble the final data package for the client
+        const pdfData: BillPDFData = {
+            bill: {
+                invoiceNumber: newBill.invoiceNumber,
+                clientName: billDetails.clientName,
+                clientAddress: billDetails.clientAddress,
+                clientPhone: billDetails.clientPhone,
+                clientPanNumber: billDetails.panNumber || null,
+                billDate: billDetails.billDate,
+                dueDate: billDetails.dueDate,
+                items: items,
+            },
+            company: safeCompanyDetails,
+            subtotal,
+            discount: finalDiscount,
+            subtotalAfterDiscount,
+            vat,
+            total,
+            appliedDiscountLabel,
+        };
 
-        return { success: "Bill created successfully!", bill: serializableBill };
+        return { success: "Bill created successfully!", data: pdfData };
     } catch (error) {
         console.error("Failed to create bill:", error);
         return { error: "Database Error: Failed to create bill." };
