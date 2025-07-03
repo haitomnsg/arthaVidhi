@@ -9,7 +9,6 @@ import {
   CalendarIcon,
   PlusCircle,
   Save,
-  FileDown,
   X,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -47,7 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
 import { createBill } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
-import { downloadTestPdf } from "@/components/bill-pdf-download";
+import { generateBillPdf } from "@/components/bill-pdf-download";
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -167,11 +166,23 @@ export default function CreateBillPage() {
         return;
       }
       
-      if (serverResponse.success) {
+      if (serverResponse.success && serverResponse.data) {
         toast({
           title: "Bill Saved",
           description: serverResponse.success,
         });
+
+        try {
+            generateBillPdf(serverResponse.data);
+        } catch (pdfError) {
+            console.error("Failed to generate PDF on client:", pdfError);
+            toast({
+                title: "PDF Generation Failed",
+                description: "The bill was saved, but the PDF could not be generated. You can download it later.",
+                variant: "destructive",
+            });
+        }
+
         form.reset(defaultFormValues);
       }
     });
@@ -324,12 +335,9 @@ export default function CreateBillPage() {
                 </form>
               </Form>
             </CardContent>
-             <CardFooter className="flex-col items-start gap-4">
+             <CardFooter>
                <Button type="submit" form="bill-form" disabled={isPending || !form.formState.isValid} size="lg">
-                 {isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Bill</>}
-               </Button>
-               <Button variant="outline" onClick={downloadTestPdf} size="sm">
-                  <FileDown className="mr-2 h-4 w-4" /> Download Test PDF
+                 {isPending ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save & Download Bill</>}
                </Button>
              </CardFooter>
           </Card>
