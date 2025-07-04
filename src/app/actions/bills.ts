@@ -27,30 +27,6 @@ const billFormSchema = z.object({
 
 type BillFormValues = z.infer<typeof billFormSchema>;
 
-// Helper function to calculate totals from plain number inputs
-const calculateBillTotals = (items: { quantity: number; rate: number }[], discount: number, discountType: 'percentage' | 'amount', discountPercentage: number) => {
-    const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
-    
-    let finalDiscount = 0;
-    let appliedDiscountLabel = 'Discount';
-
-    if (discountType === 'percentage') {
-        const percentage = discountPercentage || 0;
-        finalDiscount = subtotal * (percentage / 100);
-        if (percentage > 0) {
-            appliedDiscountLabel = `Discount (${percentage}%)`;
-        }
-    } else {
-        finalDiscount = discount || 0;
-    }
-
-    const subtotalAfterDiscount = subtotal - finalDiscount;
-    const vat = subtotalAfterDiscount * 0.13;
-    const total = subtotalAfterDiscount + vat;
-    return { subtotal, discount: finalDiscount, subtotalAfterDiscount, vat, total, appliedDiscountLabel };
-};
-
-
 export const createBill = async (values: BillFormValues): Promise<{ success?: string; error?: string; data?: any; }> => {
     const validatedFields = billFormSchema.safeParse(values);
 
@@ -69,7 +45,6 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
 
     const userId = 1;
 
-    // --- Server-side calculations from validated data ---
     const subtotalForDiscount = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
     let finalDiscount = 0;
     if (discountType === 'percentage') {
@@ -97,7 +72,7 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
                     ...billDetails,
                     clientPanNumber: panNumber,
                     invoiceNumber,
-                    discount: finalDiscount, // Store the calculated final discount
+                    discount: finalDiscount,
                     status: 'Pending',
                     userId: userId,
                 }
@@ -112,7 +87,6 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
                 data: billItemsData
             });
 
-            // Fetch the newly created bill with its items to return
             return tx.bill.findUnique({
                 where: { id: createdBill.id },
                 include: { items: true }
@@ -123,7 +97,6 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
             return { error: "Failed to retrieve the created bill after saving." };
         }
 
-        // Use the getBillForPdf logic to prepare data for the client
         const pdfDataResponse = await getBillForPdf(newBill.id);
 
         if (pdfDataResponse.error) {
@@ -155,7 +128,7 @@ export const getNextInvoiceNumber = async (): Promise<string> => {
         }
     } catch (error) {
         console.error("Failed to fetch next invoice number:", error);
-        return 'HG-ERROR'; // Return a fallback
+        return 'HG-ERROR';
     }
 };
 
@@ -221,7 +194,6 @@ export const getBillForPdf = async (billId: number): Promise<{ success?: boolean
             where: { userId: bill.userId },
         });
 
-        // Convert Prisma Decimal fields to numbers for client-side compatibility
         const plainItems = bill.items.map(item => ({
             ...item,
             quantity: item.quantity.toNumber(),
@@ -230,8 +202,6 @@ export const getBillForPdf = async (billId: number): Promise<{ success?: boolean
         
         const discount = bill.discount.toNumber();
         
-        // We don't know if it was percentage or amount, so we can't reliably reconstruct the exact label.
-        // We'll use a generic "Discount" label for the PDF.
         const subtotal = plainItems.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
         const subtotalAfterDiscount = subtotal - discount;
         const vat = subtotalAfterDiscount * 0.13;
@@ -243,8 +213,6 @@ export const getBillForPdf = async (billId: number): Promise<{ success?: boolean
             subtotalAfterDiscount, 
             vat, 
             total,
-            // When fetching an existing bill, we don't have the original discount type,
-            // so we provide a generic label for the PDF.
             appliedDiscountLabel: 'Discount' 
         };
 
@@ -264,3 +232,70 @@ export const getBillForPdf = async (billId: number): Promise<{ success?: boolean
         return { error: "Database Error: Failed to retrieve bill data." };
     }
 }
+
+export const getDashboardData = async () => {
+    try {
+        const billsFromDb = await prisma.bill.findMany({
+            include: {
+                items: true,
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+
+        let totalRevenue = 0;
+        
+        const plainBills = billsFromDb.map(bill => {
+            const plainItems = bill.items.map(item => ({
+                ...item,
+                quantity: item.quantity.toNumber(),
+                rate: item.rate.toNumber(),
+            }));
+
+            const subtotal = plainItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
+            const discount = bill.discount.toNumber();
+            const subtotalAfterDiscount = subtotal - discount;
+            const vat = subtotalAfterDiscount * 0.13;
+            const total = subtotalAfterDiscount + vat;
+            totalRevenue += total;
+
+            return {
+                ...bill,
+                id: bill.id,
+                invoiceNumber: bill.invoiceNumber,
+                clientName: bill.clientName,
+                clientPhone: bill.clientPhone,
+                billDate: bill.billDate,
+                status: bill.status,
+                items: plainItems,
+                discount: discount,
+                amount: total,
+            };
+        });
+
+        const totalBills = plainBills.length;
+        const paidBills = plainBills.filter(b => b.status === 'Paid').length;
+        const dueBills = totalBills - paidBills;
+
+        const recentBills = plainBills.slice(0, 5);
+        
+        const stats = {
+            totalRevenue,
+            totalBills,
+            paidBills,
+            dueBills
+        };
+        
+        return { success: true, stats, recentBills };
+
+    } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+        return { 
+            success: false, 
+            error: "Database Error: Failed to fetch dashboard data.",
+            stats: { totalRevenue: 0, totalBills: 0, paidBills: 0, dueBills: 0 },
+            recentBills: []
+        };
+    }
+};

@@ -1,5 +1,10 @@
+
+"use client";
+
 import Link from "next/link";
-import { CircleDollarSign, Download, Eye, FileText, PlusCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { CircleDollarSign, Download, Eye, FileText, PlusCircle, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,73 +29,103 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { getDashboardData, getBillForPdf } from "@/app/actions/bills";
+import { generateBillPdf } from "@/components/bill-pdf-download";
 
-const stats = [
-  {
-    title: "Total Revenue",
-    amount: "Rs. 4,20,500",
-    change: "+15.2% from last month",
-    icon: <CircleDollarSign className="h-5 w-5 text-muted-foreground" />,
-  },
-  {
-    title: "Total Bills",
-    amount: "2,453",
-    change: "+20 from last month",
-    icon: <FileText className="h-5 w-5 text-muted-foreground" />,
-  },
-  {
-    title: "Bills Paid",
-    amount: "2,350",
-    change: "+180 from last month",
-    icon: <FileText className="h-5 w-5 text-muted-foreground" />,
-  },
-  {
-    title: "Bills Due",
-    amount: "12",
-    change: "+2 from last month",
-    icon: <FileText className="h-5 w-5 text-muted-foreground text-destructive" />,
-  },
-];
+type Stats = {
+  totalRevenue: number;
+  totalBills: number;
+  paidBills: number;
+  dueBills: number;
+};
 
-const recentBills = [
-  {
-    invoice: "INV005",
-    client: { name: "Ava Jones", phone: "987-654-3210" },
-    amount: "Rs. 550.00",
-    status: "Paid",
-    date: "2023-10-29",
-  },
-  {
-    invoice: "INV004",
-    client: { name: "Emma Brown", phone: "987-654-3211" },
-    amount: "Rs. 450.00",
-    status: "Overdue",
-    date: "2023-10-28",
-  },
-  {
-    invoice: "INV003",
-    client: { name: "Noah Williams", phone: "987-654-3212" },
-    amount: "Rs. 350.00",
-    status: "Paid",
-    date: "2023-10-27",
-  },
-  {
-    invoice: "INV002",
-    client: { name: "Olivia Smith", phone: "987-654-3213" },
-    amount: "Rs. 150.00",
-    status: "Pending",
-    date: "2023-10-26",
-  },
-  {
-    invoice: "INV001",
-    client: { name: "Liam Johnson", phone: "987-654-3214" },
-    amount: "Rs. 250.00",
-    status: "Paid",
-    date: "2023-10-25",
-  },
-];
+type RecentBill = {
+  id: number;
+  invoiceNumber: string;
+  clientName: string;
+  clientPhone: string;
+  amount: number;
+  status: string;
+  billDate: Date;
+};
 
 export default function DashboardPage() {
+  const { toast } = useToast();
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [recentBills, setRecentBills] = useState<RecentBill[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setIsLoading(true);
+    getDashboardData().then((res) => {
+      if (res.success) {
+        setStats(res.stats);
+        setRecentBills(res.recentBills);
+      } else {
+        toast({
+          title: "Error",
+          description: res.error,
+          variant: "destructive",
+        });
+      }
+      setIsLoading(false);
+    });
+  }, [toast]);
+
+  const handleDownload = async (billId: number) => {
+    setDownloadingId(billId);
+    try {
+      const res = await getBillForPdf(billId);
+      if (res.success && res.data) {
+        generateBillPdf(res.data);
+      } else {
+        toast({
+          title: "Download Failed",
+          description: res.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  if (isLoading || !stats) {
+    return <DashboardSkeleton />;
+  }
+
+  const statsCards = [
+    {
+      title: "Total Revenue",
+      amount: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: <CircleDollarSign className="h-5 w-5 text-muted-foreground" />,
+    },
+    {
+      title: "Total Bills",
+      amount: stats.totalBills.toString(),
+      icon: <FileText className="h-5 w-5 text-muted-foreground" />,
+    },
+    {
+      title: "Bills Paid",
+      amount: stats.paidBills.toString(),
+      icon: <FileText className="h-5 w-5 text-muted-foreground" />,
+    },
+    {
+      title: "Bills Due",
+      amount: stats.dueBills.toString(),
+      icon: <FileText className="h-5 w-5 text-muted-foreground text-destructive" />,
+    },
+  ];
+
   return (
     <TooltipProvider>
       <div className="flex flex-col gap-6">
@@ -109,7 +144,7 @@ export default function DashboardPage() {
           </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
+          {statsCards.map((stat) => (
             <Card key={stat.title}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -117,7 +152,6 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stat.amount}</div>
-                <p className="text-xs text-muted-foreground">{stat.change}</p>
               </CardContent>
             </Card>
           ))}
@@ -143,64 +177,132 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentBills.map((bill) => (
-                  <TableRow key={bill.invoice}>
-                    <TableCell className="font-medium">{bill.invoice}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{bill.client.name}</div>
-                    </TableCell>
-                    <TableCell>{bill.client.phone}</TableCell>
-                    <TableCell>{bill.date}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={
-                          bill.status === "Paid"
-                            ? "default"
-                            : bill.status === "Pending"
-                            ? "secondary"
-                            : "destructive"
-                        }
-                        className={bill.status === "Paid" ? 'bg-green-500/20 text-green-700 border-green-500/20' : bill.status === "Pending" ? 'bg-amber-500/20 text-amber-700 border-amber-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}
-                      >
-                        {bill.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{bill.amount}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" asChild>
-                              <Link href="#">
-                                <Download className="h-4 w-4 text-primary" />
-                              </Link>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Download Bill</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" asChild>
-                              <Link href="#">
-                                <Eye className="h-4 w-4 text-primary" />
-                              </Link>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>View Bill</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+                {recentBills.length > 0 ? (
+                  recentBills.map((bill) => (
+                    <TableRow key={bill.id}>
+                      <TableCell className="font-medium">{bill.invoiceNumber}</TableCell>
+                      <TableCell>{bill.clientName}</TableCell>
+                      <TableCell>{bill.clientPhone}</TableCell>
+                      <TableCell>{format(new Date(bill.billDate), "PP")}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={
+                            bill.status === "Paid"
+                              ? "default"
+                              : bill.status === "Pending"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                          className={bill.status === "Paid" ? 'bg-green-500/20 text-green-700 border-green-500/20' : bill.status === "Pending" ? 'bg-amber-500/20 text-amber-700 border-amber-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}
+                        >
+                          {bill.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">Rs. {bill.amount.toFixed(2)}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownload(bill.id)}
+                                disabled={downloadingId === bill.id}
+                              >
+                                {downloadingId === bill.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Download className="h-4 w-4 text-primary" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Download Bill</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" asChild>
+                                <Link href="#">
+                                  <Eye className="h-4 w-4 text-primary" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View Bill</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      No recent bills found.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </div>
     </TooltipProvider>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 animate-pulse">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-5 w-80" />
+        </div>
+        <Skeleton className="h-11 w-40" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-5 w-5 rounded-full" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-7 w-32 mt-1" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-7 w-32 mb-2" />
+          <Skeleton className="h-5 w-56" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {[...Array(7)].map((_, i) => (
+                    <TableHead key={i}><Skeleton className="h-5 w-full max-w-24" /></TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...Array(5)].map((_, i) => (
+                  <TableRow key={i}>
+                    {[...Array(7)].map((_, j) => (
+                      <TableCell key={j}><Skeleton className="h-6 w-full" /></TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
