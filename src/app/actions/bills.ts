@@ -4,6 +4,7 @@
 import prisma from '@/lib/db';
 import * as z from 'zod';
 import type { BillItem } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -87,17 +88,17 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
                 data: billItemsData
             });
 
-            return tx.bill.findUnique({
-                where: { id: createdBill.id },
-                include: { items: true }
-            });
+            return createdBill.id;
         });
         
         if (!newBill) {
             return { error: "Failed to retrieve the created bill after saving." };
         }
+        
+        revalidatePath('/dashboard/bills');
+        revalidatePath('/dashboard');
 
-        const pdfDataResponse = await getBillForPdf(newBill.id);
+        const pdfDataResponse = await getBillDetails(newBill);
 
         if (pdfDataResponse.error) {
              return { error: pdfDataResponse.error };
@@ -179,7 +180,7 @@ export const getAllBills = async () => {
 };
 
 
-export const getBillForPdf = async (billId: number): Promise<{ success?: boolean; error?: string; data?: any; }> => {
+export const getBillDetails = async (billId: number): Promise<{ success?: boolean; error?: string; data?: any; }> => {
     try {
         const bill = await prisma.bill.findUnique({
             where: { id: billId },
@@ -198,6 +199,10 @@ export const getBillForPdf = async (billId: number): Promise<{ success?: boolean
             ...item,
             quantity: item.quantity.toNumber(),
             rate: item.rate.toNumber(),
+            id: item.id,
+            billId: item.billId,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
         }));
         
         const discount = bill.discount.toNumber();
@@ -297,5 +302,50 @@ export const getDashboardData = async () => {
             stats: { totalRevenue: 0, totalBills: 0, paidBills: 0, dueBills: 0 },
             recentBills: []
         };
+    }
+};
+
+
+export const updateBillStatus = async (billId: number, status: string): Promise<{ success?: string; error?: string; }> => {
+    const validStatuses = ['Pending', 'Paid', 'Overdue'];
+    if (!validStatuses.includes(status)) {
+        return { error: "Invalid status provided." };
+    }
+
+    try {
+        await prisma.bill.update({
+            where: { id: billId },
+            data: { status: status }
+        });
+
+        revalidatePath(`/dashboard/bills/${billId}`);
+        revalidatePath('/dashboard/bills');
+        revalidatePath('/dashboard');
+
+        return { success: "Bill status updated successfully." };
+    } catch (error) {
+        console.error(`Failed to update status for bill ${billId}:`, error);
+        return { error: "Database Error: Failed to update bill status." };
+    }
+};
+
+export const deleteBill = async (billId: number): Promise<{ success?: string; error?: string; }> => {
+    try {
+        await prisma.$transaction(async (tx) => {
+            await tx.billItem.deleteMany({
+                where: { billId: billId }
+            });
+            await tx.bill.delete({
+                where: { id: billId }
+            });
+        });
+
+        revalidatePath('/dashboard/bills');
+        revalidatePath('/dashboard');
+        
+        return { success: "Bill deleted successfully." };
+    } catch (error) {
+        console.error(`Failed to delete bill ${billId}:`, error);
+        return { error: "Database Error: Failed to delete bill." };
     }
 };

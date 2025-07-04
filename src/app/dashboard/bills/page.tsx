@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { getAllBills, getBillForPdf } from "@/app/actions/bills";
+import { getAllBills, getBillDetails } from "@/app/actions/bills";
 import { generateBillPdf } from "@/components/bill-pdf-download";
 
 type Bill = {
@@ -80,7 +80,7 @@ export default function AllBillsPage() {
   const handleDownload = async (billId: number) => {
     setDownloadingId(billId);
     try {
-      const res = await getBillForPdf(billId);
+      const res = await getBillDetails(billId);
       if (res.success && res.data) {
         generateBillPdf(res.data);
       } else {
@@ -199,7 +199,7 @@ export default function AllBillsPage() {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button variant="ghost" size="icon" asChild>
-                                <Link href="#">
+                                <Link href={`/dashboard/bills/${bill.id}`}>
                                   <Eye className="h-4 w-4 text-primary" />
                                 </Link>
                               </Button>
