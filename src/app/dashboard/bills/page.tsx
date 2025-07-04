@@ -1,13 +1,10 @@
+
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useTransition } from "react";
 import Link from "next/link";
-import {
-  Download,
-  Eye,
-  PlusCircle,
-  Search,
-} from "lucide-react";
+import { format } from "date-fns";
+import { Download, Eye, PlusCircle, Search, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,28 +30,76 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { getAllBills, getBillForPdf } from "@/app/actions/bills";
+import { generateBillPdf } from "@/components/bill-pdf-download";
 
-const allBills = [
-    { invoice: "INV001", client: { name: "Liam Johnson", phone: "987-654-3214" }, date: "2023-10-25", amount: "Rs. 250.00", status: "Paid" },
-    { invoice: "INV002", client: { name: "Olivia Smith", phone: "987-654-3213" }, date: "2023-10-26", amount: "Rs. 150.00", status: "Pending" },
-    { invoice: "INV003", client: { name: "Noah Williams", phone: "987-654-3212" }, date: "2023-10-27", amount: "Rs. 350.00", status: "Paid" },
-    { invoice: "INV004", client: { name: "Emma Brown", phone: "987-654-3211" }, date: "2023-10-28", amount: "Rs. 450.00", status: "Overdue" },
-    { invoice: "INV005", client: { name: "Ava Jones", phone: "987-654-3210" }, date: "2023-10-29", amount: "Rs. 550.00", status: "Paid" },
-    { invoice: "INV006", client: { name: "William Garcia", phone: "987-654-3215" }, date: "2023-10-30", amount: "Rs. 200.00", status: "Pending" },
-    { invoice: "INV007", client: { name: "Sophia Miller", phone: "987-654-3216" }, date: "2023-10-31", amount: "Rs. 300.00", status: "Paid" },
-];
+type Bill = {
+  id: number;
+  invoiceNumber: string;
+  clientName: string;
+  clientPhone: string;
+  billDate: Date;
+  status: string;
+  amount: number;
+};
 
 export default function AllBillsPage() {
+  const { toast } = useToast();
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setIsLoading(true);
+    getAllBills().then((res) => {
+      if (res.success && res.data) {
+        setBills(res.data);
+      } else {
+        toast({
+          title: "Error",
+          description: res.error,
+          variant: "destructive",
+        });
+      }
+      setIsLoading(false);
+    });
+  }, [toast]);
 
   const filteredBills = useMemo(() => {
-    if (!searchTerm) return allBills;
-    return allBills.filter(
+    if (!searchTerm) return bills;
+    return bills.filter(
       (bill) =>
-        bill.invoice.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bill.client.name.toLowerCase().includes(searchTerm.toLowerCase())
+        bill.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        bill.clientName.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [searchTerm]);
+  }, [searchTerm, bills]);
+
+  const handleDownload = async (billId: number) => {
+    setDownloadingId(billId);
+    try {
+      const res = await getBillForPdf(billId);
+      if (res.success && res.data) {
+        generateBillPdf(res.data);
+      } else {
+        toast({
+          title: "Download Failed",
+          description: res.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <TooltipProvider>
@@ -82,70 +127,136 @@ export default function AllBillsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Client Name</TableHead>
-                <TableHead>Client Phone</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBills.map((bill) => (
-                <TableRow key={bill.invoice}>
-                  <TableCell className="font-medium">{bill.invoice}</TableCell>
-                  <TableCell>{bill.client.name}</TableCell>
-                  <TableCell>{bill.client.phone}</TableCell>
-                  <TableCell>{bill.date}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        bill.status === "Paid" ? "default" : bill.status === "Pending" ? "secondary" : "destructive"
-                      }
-                       className={bill.status === "Paid" ? 'bg-green-500/20 text-green-700 border-green-500/20' : bill.status === "Pending" ? 'bg-amber-500/20 text-amber-700 border-amber-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}
-                    >
-                      {bill.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{bill.amount}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link href="#">
-                              <Download className="h-4 w-4 text-primary" />
-                            </Link>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Download Bill</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link href="#">
-                              <Eye className="h-4 w-4 text-primary" />
-                            </Link>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>View Bill</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </TableCell>
+          {isLoading ? (
+            <TableSkeleton />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice #</TableHead>
+                  <TableHead>Client Name</TableHead>
+                  <TableHead>Client Phone</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredBills.length > 0 ? (
+                  filteredBills.map((bill) => (
+                    <TableRow key={bill.id}>
+                      <TableCell className="font-medium">
+                        {bill.invoiceNumber}
+                      </TableCell>
+                      <TableCell>{bill.clientName}</TableCell>
+                      <TableCell>{bill.clientPhone}</TableCell>
+                      <TableCell>{format(new Date(bill.billDate), "PP")}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            bill.status === "Paid"
+                              ? "default"
+                              : bill.status === "Pending"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                          className={
+                            bill.status === "Paid"
+                              ? "bg-green-500/20 text-green-700 border-green-500/20"
+                              : bill.status === "Pending"
+                              ? "bg-amber-500/20 text-amber-700 border-amber-500/20"
+                              : "bg-red-500/20 text-red-700 border-red-500/20"
+                          }
+                        >
+                          {bill.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        Rs. {bill.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownload(bill.id)}
+                                disabled={downloadingId === bill.id}
+                              >
+                                {downloadingId === bill.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Download className="h-4 w-4 text-primary" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Download Bill</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" asChild>
+                                <Link href="#">
+                                  <Eye className="h-4 w-4 text-primary" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View Bill</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                    <TableRow>
+                        <TableCell colSpan={7} className="h-24 text-center">
+                            No bills found.
+                        </TableCell>
+                    </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </TooltipProvider>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+            <TableHead><Skeleton className="h-5 w-32" /></TableHead>
+            <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+            <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+            <TableHead><Skeleton className="h-5 w-16" /></TableHead>
+            <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead>
+            <TableHead className="text-center"><Skeleton className="h-5 w-20 mx-auto" /></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {[...Array(5)].map((_, i) => (
+            <TableRow key={i}>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

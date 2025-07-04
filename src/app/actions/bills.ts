@@ -3,6 +3,7 @@
 
 import prisma from '@/lib/db';
 import * as z from 'zod';
+import type { BillItem } from '@prisma/client';
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -26,6 +27,30 @@ const billFormSchema = z.object({
 
 type BillFormValues = z.infer<typeof billFormSchema>;
 
+// Helper function to calculate totals from plain number inputs
+const calculateBillTotals = (items: { quantity: number; rate: number }[], discount: number, discountType: 'percentage' | 'amount', discountPercentage: number) => {
+    const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
+    
+    let finalDiscount = 0;
+    let appliedDiscountLabel = 'Discount';
+
+    if (discountType === 'percentage') {
+        const percentage = discountPercentage || 0;
+        finalDiscount = subtotal * (percentage / 100);
+        if (percentage > 0) {
+            appliedDiscountLabel = `Discount (${percentage}%)`;
+        }
+    } else {
+        finalDiscount = discount || 0;
+    }
+
+    const subtotalAfterDiscount = subtotal - finalDiscount;
+    const vat = subtotalAfterDiscount * 0.13;
+    const total = subtotalAfterDiscount + vat;
+    return { subtotal, discount: finalDiscount, subtotalAfterDiscount, vat, total, appliedDiscountLabel };
+};
+
+
 export const createBill = async (values: BillFormValues): Promise<{ success?: string; error?: string; data?: any; }> => {
     const validatedFields = billFormSchema.safeParse(values);
 
@@ -44,26 +69,14 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
 
     const userId = 1;
 
-    // --- Server-side calculations ---
-    const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
-    
+    // --- Server-side calculations from validated data ---
+    const subtotalForDiscount = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
     let finalDiscount = 0;
-    let appliedDiscountLabel = 'Discount';
     if (discountType === 'percentage') {
-        const percentage = discountPercentage || 0;
-        finalDiscount = subtotal * (percentage / 100);
-        if (percentage > 0) {
-            appliedDiscountLabel = `Discount (${percentage}%)`;
-        }
+        finalDiscount = subtotalForDiscount * ((discountPercentage || 0) / 100);
     } else {
         finalDiscount = discountAmount || 0;
     }
-
-    const subtotalAfterDiscount = subtotal - finalDiscount;
-    const vat = subtotalAfterDiscount * 0.13;
-    const total = subtotalAfterDiscount + vat;
-    const totals = { subtotal, discount: finalDiscount, subtotalAfterDiscount, vat, total, appliedDiscountLabel };
-
 
     try {
         const newBill = await prisma.$transaction(async (tx) => {
@@ -84,7 +97,7 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
                     ...billDetails,
                     clientPanNumber: panNumber,
                     invoiceNumber,
-                    discount: finalDiscount,
+                    discount: finalDiscount, // Store the calculated final discount
                     status: 'Pending',
                     userId: userId,
                 }
@@ -106,28 +119,20 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
             });
         });
         
-        const company = await prisma.company.findUnique({
-            where: { userId },
-        });
-
         if (!newBill) {
             return { error: "Failed to retrieve the created bill after saving." };
         }
 
-        // Convert Prisma Decimal fields to numbers for client-side compatibility
-        const plainBill = {
-            ...newBill,
-            discount: newBill.discount.toNumber(), // Convert Decimal to number
-            items: newBill.items.map(item => ({
-                ...item,
-                quantity: item.quantity.toNumber(), // Convert Decimal to number
-                rate: item.rate.toNumber(),         // Convert Decimal to number
-            }))
-        };
+        // Use the getBillForPdf logic to prepare data for the client
+        const pdfDataResponse = await getBillForPdf(newBill.id);
 
+        if (pdfDataResponse.error) {
+             return { error: pdfDataResponse.error };
+        }
+        
         return { 
             success: "Bill saved successfully!",
-            data: { bill: plainBill, company: company || {}, totals } 
+            data: pdfDataResponse.data
         };
     } catch (error) {
         console.error("Failed to create bill:", error);
@@ -153,3 +158,109 @@ export const getNextInvoiceNumber = async (): Promise<string> => {
         return 'HG-ERROR'; // Return a fallback
     }
 };
+
+export const getAllBills = async () => {
+    try {
+        const bills = await prisma.bill.findMany({
+            include: {
+                items: {
+                    select: {
+                        quantity: true,
+                        rate: true,
+                    },
+                },
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+
+        const billsWithTotals = bills.map(bill => {
+            const plainItems = bill.items.map(i => ({
+                quantity: i.quantity.toNumber(),
+                rate: i.rate.toNumber(),
+            }));
+            const discount = bill.discount.toNumber();
+            
+            const subtotal = plainItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
+            const subtotalAfterDiscount = subtotal - discount;
+            const vat = subtotalAfterDiscount * 0.13;
+            const total = subtotalAfterDiscount + vat;
+
+            return {
+                id: bill.id,
+                invoiceNumber: bill.invoiceNumber,
+                clientName: bill.clientName,
+                clientPhone: bill.clientPhone,
+                billDate: bill.billDate,
+                status: bill.status,
+                amount: total,
+            };
+        });
+
+        return { success: true, data: billsWithTotals };
+    } catch (error) {
+        console.error("Failed to fetch bills:", error);
+        return { success: false, error: "Database Error: Failed to fetch bills." };
+    }
+};
+
+
+export const getBillForPdf = async (billId: number): Promise<{ success?: boolean; error?: string; data?: any; }> => {
+    try {
+        const bill = await prisma.bill.findUnique({
+            where: { id: billId },
+            include: { items: true },
+        });
+
+        if (!bill) {
+            return { error: "Bill not found." };
+        }
+
+        const company = await prisma.company.findUnique({
+            where: { userId: bill.userId },
+        });
+
+        // Convert Prisma Decimal fields to numbers for client-side compatibility
+        const plainItems = bill.items.map(item => ({
+            ...item,
+            quantity: item.quantity.toNumber(),
+            rate: item.rate.toNumber(),
+        }));
+        
+        const discount = bill.discount.toNumber();
+        
+        // We don't know if it was percentage or amount, so we can't reliably reconstruct the exact label.
+        // We'll use a generic "Discount" label for the PDF.
+        const subtotal = plainItems.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
+        const subtotalAfterDiscount = subtotal - discount;
+        const vat = subtotalAfterDiscount * 0.13;
+        const total = subtotalAfterDiscount + vat;
+
+        const totals = { 
+            subtotal, 
+            discount, 
+            subtotalAfterDiscount, 
+            vat, 
+            total,
+            // When fetching an existing bill, we don't have the original discount type,
+            // so we provide a generic label for the PDF.
+            appliedDiscountLabel: 'Discount' 
+        };
+
+        const plainBill = {
+            ...bill,
+            discount: discount,
+            items: plainItems,
+        };
+
+        return { 
+            success: true,
+            data: { bill: plainBill, company: company || {}, totals } 
+        };
+
+    } catch (error) {
+        console.error(`Failed to get bill data for PDF (ID: ${billId}):`, error);
+        return { error: "Database Error: Failed to retrieve bill data." };
+    }
+}
