@@ -44,7 +44,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/logo";
-import { createBill } from "@/app/actions/bills";
+import { createBill, getNextInvoiceNumber } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
 import { generateBillPdf } from "@/components/bill-pdf-download";
 
@@ -87,9 +87,11 @@ export default function CreateBillPage() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [companyDetails, setCompanyDetails] = useState<Partial<Company>>({});
+  const [nextInvoiceNumber, setNextInvoiceNumber] = useState<string>("#INV-PREVIEW");
 
   useEffect(() => {
     getCompanyDetails().then(setCompanyDetails);
+    getNextInvoiceNumber().then(setNextInvoiceNumber);
   }, []);
 
   const form = useForm<BillFormValues>({
@@ -184,6 +186,7 @@ export default function CreateBillPage() {
         }
 
         form.reset(defaultFormValues);
+        getNextInvoiceNumber().then(setNextInvoiceNumber);
       }
     });
   };
@@ -356,7 +359,8 @@ export default function CreateBillPage() {
                 subtotalAfterDiscount={subtotalAfterDiscount}
                 vat={vat} 
                 total={total} 
-                appliedDiscountLabel={appliedDiscountLabel} 
+                appliedDiscountLabel={appliedDiscountLabel}
+                invoiceNumber={nextInvoiceNumber} 
               />
             </CardContent>
           </Card>
@@ -375,9 +379,10 @@ interface BillPreviewProps {
     vat: number;
     total: number;
     appliedDiscountLabel: string;
+    invoiceNumber: string;
 }
 
-function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel }: BillPreviewProps) {
+function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel, invoiceNumber }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(bill.billDate, "PPP") : 'N/A';
   const formattedDueDate = bill.dueDate ? format(bill.dueDate, "PPP") : formattedDate;
   return (
@@ -400,7 +405,7 @@ function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount,
         </div>
         <div className="text-right">
           <h2 className="text-3xl font-bold uppercase text-primary">Invoice</h2>
-          <p className="text-muted-foreground">#INV-PREVIEW</p>
+          <p className="text-muted-foreground"># {invoiceNumber}</p>
         </div>
        </header>
        <div className="grid grid-cols-2 gap-8 mb-8">

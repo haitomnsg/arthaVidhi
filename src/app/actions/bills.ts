@@ -134,3 +134,22 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
         return { error: "Database Error: Failed to create bill." };
     }
 }
+
+export const getNextInvoiceNumber = async (): Promise<string> => {
+    try {
+        const lastBill = await prisma.bill.findFirst({
+            orderBy: { id: 'desc' },
+            select: { invoiceNumber: true }
+        });
+
+        if (lastBill && lastBill.invoiceNumber.startsWith('HG')) {
+            const lastNum = parseInt(lastBill.invoiceNumber.substring(2), 10);
+            return `HG${String(lastNum + 1).padStart(4, '0')}`;
+        } else {
+            return 'HG0100';
+        }
+    } catch (error) {
+        console.error("Failed to fetch next invoice number:", error);
+        return 'HG-ERROR'; // Return a fallback
+    }
+};
