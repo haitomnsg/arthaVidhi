@@ -1,12 +1,30 @@
-
 'use client';
 
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import type { Company, Bill, BillItem } from '@prisma/client';
 
+// This matches the data structure returned by the `createBill` server action
 interface BillPdfData {
-    bill: Bill & { items: BillItem[] };
+    bill: {
+        id: number;
+        invoiceNumber: string;
+        clientName: string;
+        clientAddress: string;
+        clientPhone: string;
+        clientPanNumber: string | null;
+        billDate: Date;
+        dueDate: Date;
+        discount: number;
+        status: string;
+        items: {
+            id: number;
+            description: string;
+            quantity: number;
+            unit: string;
+            rate: number;
+        }[];
+    };
     company: Partial<Company>;
     totals: {
         subtotal: number;
@@ -18,55 +36,50 @@ interface BillPdfData {
     };
 }
 
+
 export const generateBillPdf = (data: BillPdfData) => {
   try {
     const { bill, company, totals } = data;
     const doc = new jsPDF();
 
     // --- Define Colors & Fonts ---
-    const primaryColor = [254, 145, 22]; // Orange from ArthaVidhi theme hsl(32 100% 50%) -> #fe9116
+    const primaryColor = [255, 135, 3]; // #FF8703
     const textColor = [38, 38, 38]; // #262626
     const mutedTextColor = [115, 115, 115]; // #737373
-    const headerBgColor = [252, 243, 232]; // Muted background from theme
+    const headerBgColor = [252, 243, 232]; // Muted background
     const pageHeight = doc.internal.pageSize.height;
     const pageWidth = doc.internal.pageSize.width;
     const margin = 15;
     let y = 20;
 
     // --- Header Section ---
-    
-    // Logo
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.text("ArthaVidhi", margin, y);
 
-    // Invoice Title
     doc.setFontSize(26);
     doc.text("INVOICE", pageWidth - margin, y, { align: 'right' });
     y += 7;
     
-    // Company Name
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
     doc.text(company?.name || "Your Company Name", margin, y);
     
-    // Invoice Number
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     doc.text(`# ${bill.invoiceNumber}`, pageWidth - margin, y, { align: 'right' });
     y += 6;
 
-    // Company Details
     doc.setFontSize(9);
     doc.text(company?.address || "Company Address", margin, y);
     y += 5;
-    const phoneEmail = `Phone: ${company.phone || 'N/A'} | Email: ${company.email || 'N/A'}`;
+    const phoneEmail = `Phone: ${company?.phone || 'N/A'} | Email: ${company?.email || 'N/A'}`;
     doc.text(phoneEmail, margin, y);
     y += 5;
-    const panVat = `PAN: ${company.panNumber || 'N/A'} | VAT: ${company.vatNumber || 'N/A'}`;
+    const panVat = `PAN: ${company?.panNumber || 'N/A'} | VAT: ${company?.vatNumber || 'N/A'}`;
     doc.text(panVat, margin, y);
     y += 15;
 
@@ -101,10 +114,13 @@ export const generateBillPdf = (data: BillPdfData) => {
     doc.text(bill.clientAddress, margin, y);
     y += 6;
     doc.text(bill.clientPhone, margin, y);
+    y += 6;
+    if (bill.clientPanNumber) {
+        doc.text(`PAN: ${bill.clientPanNumber}`, margin, y);
+    }
     y += 15;
 
     // --- Items Table ---
-    // Table Header
     doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
     doc.rect(margin, y, pageWidth - (margin * 2), 8, 'F');
     y += 6;
@@ -112,57 +128,40 @@ export const generateBillPdf = (data: BillPdfData) => {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
     
-    const itemColX = margin + 3;
-    const qtyColX = itemColX + 80;
-    const unitColX = qtyColX + 20;
-    const rateColX = unitColX + 25;
-    const amountColX = pageWidth - margin - 3;
-    
-    doc.text("Item", itemColX, y);
-    doc.text("Qty", qtyColX, y, { align: 'center'});
-    doc.text("Unit", unitColX, y, { align: 'center'});
-    doc.text("Rate", rateColX, y, { align: 'right'});
-    doc.text("Amount", amountColX, y, { align: 'right' });
+    doc.text("Item", margin + 3, y);
+    doc.text("Qty", 115, y, { align: 'center' });
+    doc.text("Unit", 135, y, { align: 'center' });
+    doc.text("Rate", 160, y, { align: 'right' });
+    doc.text("Amount", 195, y, { align: 'right' });
     y += 3;
 
-    // Table Body
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     
-    if (!bill.items || bill.items.length === 0) {
-        y += 15;
-        doc.setFontSize(10);
-        doc.text("No items on this bill.", pageWidth / 2, y, { align: 'center' });
-    } else {
-        bill.items.forEach(item => {
-            if (y > pageHeight - 60) {
-                doc.addPage();
-                y = 20;
-            }
-            y += 8;
-            const itemTotal = item.quantity * item.rate;
-
-            // Draw item row
-            doc.text(item.description, itemColX, y, { maxWidth: 75 });
-            doc.text(item.quantity.toString(), qtyColX, y, { align: 'center'});
-            doc.text(item.unit, unitColX, y, { align: 'center'});
-            doc.text(`Rs. ${item.rate.toFixed(2)}`, rateColX, y, { align: 'right'});
-            doc.text(`Rs. ${itemTotal.toFixed(2)}`, amountColX, y, { align: 'right' });
-        });
-    }
+    bill.items.forEach(item => {
+        const itemTotal = item.quantity * item.rate;
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
+        doc.text(item.description, margin + 3, y, { maxWidth: 90 });
+        doc.text(item.quantity.toString(), 115, y, { align: 'center' });
+        doc.text(item.unit, 135, y, { align: 'center' });
+        doc.text(`Rs. ${item.rate.toFixed(2)}`, 160, y, { align: 'right' });
+        doc.text(`Rs. ${itemTotal.toFixed(2)}`, 195, y, { align: 'right' });
+        y += 2;
+    });
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10; // Margin after the table
 
     // --- Totals Section ---
-    let totalsY = pageHeight - 80;
-    if (y > totalsY) { // prevent totals from overlapping items
-        totalsY = y + 15;
+    const totalsBlockHeight = 50; // Estimated height for totals section
+    if (y + totalsBlockHeight > pageHeight - 25) { // Check if it fits on the page (25 is margin for footer)
+      doc.addPage();
+      y = 20; // Reset to top if new page is added
     }
-    if (totalsY > pageHeight - 80) {
-        doc.addPage();
-        totalsY = 20;
-    }
-    
+
     const totalsX = pageWidth - margin;
     const totalsLabelX = totalsX - 80;
+    let totalsY = y;
     
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
@@ -180,14 +179,19 @@ export const generateBillPdf = (data: BillPdfData) => {
     doc.line(totalsLabelX - 5, totalsY, totalsX, totalsY);
     totalsY += 7;
     
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
     doc.text("Subtotal after Discount", totalsLabelX, totalsY);
     doc.text(`Rs. ${totals.subtotalAfterDiscount.toFixed(2)}`, totalsX, totalsY, { align: 'right' });
     totalsY += 7;
 
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     doc.text("VAT (13%)", totalsLabelX, totalsY);
     doc.text(`Rs. ${totals.vat.toFixed(2)}`, totalsX, totalsY, { align: 'right' });
     totalsY += 7;
 
+    doc.setLineWidth(0.2);
     doc.line(totalsLabelX - 5, totalsY, totalsX, totalsY);
     totalsY += 8;
 
@@ -198,19 +202,19 @@ export const generateBillPdf = (data: BillPdfData) => {
     doc.text(`Rs. ${totals.total.toFixed(2)}`, totalsX, totalsY, { align: 'right' });
     
     // --- Footer Section ---
-    let footerY = pageHeight - 20;
+    const footerY = pageHeight - 20;
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     doc.text("Thank you for your business!", pageWidth / 2, footerY, { align: 'center' });
-    footerY += 4;
-    doc.text("ArthaVidhi - Billing Software by Haitomns Groups", pageWidth / 2, footerY, { align: 'center' });
+    doc.text("ArthaVidhi - Billing Software by Haitomns Groups", pageWidth / 2, footerY + 4, { align: 'center' });
 
     // --- Save the PDF ---
     doc.save(`${bill.invoiceNumber}.pdf`);
 
   } catch (error) {
     console.error("Error generating PDF: ", error);
+    // Use a user-friendly toast or alert in a real app
     alert("Failed to generate PDF. Please try again.");
     throw error;
   }
