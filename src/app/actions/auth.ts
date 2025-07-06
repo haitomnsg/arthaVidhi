@@ -1,3 +1,4 @@
+
 'use server';
 
 import * as z from 'zod';
@@ -22,26 +23,32 @@ export const registerUser = async (values: z.infer<typeof registerSchema>) => {
     }
 
     const { email, password, name, phone } = validatedFields.data;
-    const hashedPassword = await bcryptjs.hash(password, 10);
 
-    const existingUser = await prisma.user.findUnique({
-        where: { email },
-    });
+    try {
+        const hashedPassword = await bcryptjs.hash(password, 10);
 
-    if (existingUser) {
-        return { error: "Email is already in use." };
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (existingUser) {
+            return { error: "Email is already in use." };
+        }
+
+        await prisma.user.create({
+            data: {
+                name,
+                email,
+                phone,
+                password: hashedPassword,
+            },
+        });
+
+        return { success: "User created successfully!" };
+    } catch (error) {
+        console.error("Registration failed:", error);
+        return { error: "Database Error: Could not register user." };
     }
-
-    await prisma.user.create({
-        data: {
-            name,
-            email,
-            phone,
-            password: hashedPassword,
-        },
-    });
-
-    return { success: "User created successfully!" };
 };
 
 
@@ -60,22 +67,27 @@ export const loginUser = async (values: z.infer<typeof loginSchema>) => {
 
     const { email, password } = validatedFields.data;
 
-    const existingUser = await prisma.user.findUnique({
-        where: { email },
-    });
+    try {
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
+        });
 
-    if (!existingUser || !existingUser.password) {
+        if (!existingUser || !existingUser.password) {
+            return { error: "Invalid credentials!" };
+        }
+
+        const passwordsMatch = await bcryptjs.compare(
+            password,
+            existingUser.password
+        );
+
+        if (passwordsMatch) {
+            return { success: "Login successful!" };
+        }
+        
         return { error: "Invalid credentials!" };
+    } catch (error) {
+        console.error("Login failed:", error);
+        return { error: "Database Error: Could not log in." };
     }
-
-    const passwordsMatch = await bcryptjs.compare(
-        password,
-        existingUser.password
-    );
-
-    if (passwordsMatch) {
-        return { success: "Login successful!" };
-    }
-    
-    return { error: "Invalid credentials!" };
 }
