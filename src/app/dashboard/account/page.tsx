@@ -26,8 +26,27 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { getAccountDetails, updateUserProfile, updatePassword, upsertCompany } from "@/app/actions/account";
-import type { User, Company } from "@prisma/client";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// Define types locally since Prisma types are removed
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+interface Company {
+  id: number;
+  userId: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  panNumber?: string | null;
+  vatNumber?: string | null;
+}
+
 
 const profileFormSchema = z.object({
   name: z.string().min(2, "Name is too short."),

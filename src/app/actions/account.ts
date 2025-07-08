@@ -1,9 +1,33 @@
 'use server';
 
-import prisma from '@/lib/db';
+import db from '@/lib/db';
 import * as z from 'zod';
 import bcryptjs from 'bcryptjs';
-import type { User, Company } from '@prisma/client';
+import type { RowDataPacket, OkPacket } from 'mysql2';
+
+interface User {
+    id: number;
+    name: string;
+    email: string;
+    phone: string;
+    password?: string; // It's hashed, but let's make it optional for returns
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+interface Company {
+    id: number;
+    userId: number;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    panNumber: string | null;
+    vatNumber: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 
 // TODO: Replace with authenticated user ID from session
 const getUserId = async () => {
@@ -13,13 +37,11 @@ const getUserId = async () => {
 export const getAccountDetails = async (): Promise<{ user: User | null; company: Company | null }> => {
     const userId = await getUserId();
     try {
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-        });
+        const [userRows] = await db.query<RowDataPacket[]>('SELECT * FROM `User` WHERE `id` = ?', [userId]);
+        const user = (userRows[0] as User) || null;
 
-        const company = await prisma.company.findUnique({
-            where: { userId },
-        });
+        const [companyRows] = await db.query<RowDataPacket[]>('SELECT * FROM `Company` WHERE `userId` = ?', [userId]);
+        const company = (companyRows[0] as Company) || null;
 
         return { user, company };
     } catch (error) {
@@ -42,17 +64,21 @@ export const updateUserProfile = async (values: z.infer<typeof profileFormSchema
         return { error: "Invalid fields!" };
     }
     
-    // Check if email is being changed to one that already exists
-    const existingUser = await prisma.user.findUnique({ where: { email: validatedFields.data.email } });
-    if(existingUser && existingUser.id !== userId) {
-        return { error: "Email is already in use by another account." };
-    }
+    const { name, email, phone } = validatedFields.data;
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: validatedFields.data,
-        });
+        const [existingUsers] = await db.query<RowDataPacket[]>(
+            'SELECT `id` FROM `User` WHERE `email` = ? AND `id` != ?',
+            [email, userId]
+        );
+        if (existingUsers.length > 0) {
+            return { error: "Email is already in use by another account." };
+        }
+
+        await db.query(
+            'UPDATE `User` SET `name` = ?, `email` = ?, `phone` = ? WHERE `id` = ?',
+            [name, email, phone, userId]
+        );
         return { success: "Profile updated successfully!" };
     } catch (error) {
         console.error("Failed to update profile:", error);
@@ -72,23 +98,27 @@ export const updatePassword = async (values: z.infer<typeof passwordFormSchema>)
         return { error: "Invalid fields!" };
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.password) {
-        return { error: "User not found." };
-    }
-
-    const passwordsMatch = await bcryptjs.compare(values.currentPassword, user.password);
-    if (!passwordsMatch) {
-        return { error: "Current password does not match." };
-    }
-
-    const hashedPassword = await bcryptjs.hash(values.newPassword, 10);
+    const { currentPassword, newPassword } = values;
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: { password: hashedPassword },
-        });
+        const [userRows] = await db.query<RowDataPacket[]>('SELECT `password` FROM `User` WHERE `id` = ?', [userId]);
+        const user = userRows[0] as User | undefined;
+
+        if (!user || !user.password) {
+            return { error: "User not found." };
+        }
+
+        const passwordsMatch = await bcryptjs.compare(currentPassword, user.password);
+        if (!passwordsMatch) {
+            return { error: "Current password does not match." };
+        }
+
+        const hashedPassword = await bcryptjs.hash(newPassword, 10);
+
+        await db.query(
+            'UPDATE `User` SET `password` = ? WHERE `id` = ?',
+            [hashedPassword, userId]
+        );
         return { success: "Password updated successfully!" };
     } catch (error) {
         console.error("Failed to update password:", error);
@@ -113,17 +143,25 @@ export const upsertCompany = async (values: z.infer<typeof companyFormSchema>) =
         return { error: "Invalid company details!" };
     }
 
-    const data = {
-        ...validatedFields.data,
-        userId,
-    };
+    const data = validatedFields.data;
 
     try {
-        await prisma.company.upsert({
-            where: { userId },
-            update: data,
-            create: data,
-        });
+        const [companyRows] = await db.query<RowDataPacket[]>('SELECT `id` FROM `Company` WHERE `userId` = ?', [userId]);
+        
+        if (companyRows.length > 0) {
+            // Update
+            await db.query(
+                'UPDATE `Company` SET `name` = ?, `address` = ?, `phone` = ?, `email` = ?, `panNumber` = ?, `vatNumber` = ? WHERE `userId` = ?',
+                [data.name, data.address, data.phone, data.email, data.panNumber, data.vatNumber, userId]
+            );
+        } else {
+            // Insert
+            await db.query(
+                'INSERT INTO `Company` (`name`, `address`, `phone`, `email`, `panNumber`, `vatNumber`, `userId`) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [data.name, data.address, data.phone, data.email, data.panNumber, data.vatNumber, userId]
+            );
+        }
+        
         return { success: "Company details saved successfully!" };
     } catch (error) {
         console.error("Failed to save company details:", error);

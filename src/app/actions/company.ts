@@ -1,16 +1,26 @@
 'use server';
 
-import prisma from '@/lib/db';
-import type { Company } from '@prisma/client';
+import db from '@/lib/db';
+import type { RowDataPacket } from 'mysql2';
+
+interface Company {
+    id: number;
+    userId: number;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    panNumber: string | null;
+    vatNumber: string | null;
+}
 
 export const getCompanyDetails = async (): Promise<Partial<Company>> => {
     // TODO: Replace with authenticated user ID from session
     const userId = 1;
 
     try {
-        const company = await prisma.company.findUnique({
-            where: { userId },
-        });
+        const [companyRows] = await db.query<RowDataPacket[]>('SELECT * FROM `Company` WHERE `userId` = ?', [userId]);
+        const company = (companyRows[0] as Company) || null;
 
         // Return real data or a default object to avoid breaking the UI
         return company || {

@@ -2,7 +2,18 @@
 
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
-import type { Company, Bill, BillItem } from '@prisma/client';
+
+// Define types locally since Prisma types are removed
+interface Company {
+    id: number;
+    userId: number;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    panNumber: string | null;
+    vatNumber: string | null;
+}
 
 // This matches the data structure returned by the `createBill` server action
 interface BillPdfData {

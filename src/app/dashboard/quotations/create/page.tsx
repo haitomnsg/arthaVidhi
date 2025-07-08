@@ -12,7 +12,6 @@ import {
   CalendarIcon,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { Company } from '@prisma/client';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +45,17 @@ import { getCompanyDetails } from "@/app/actions/company";
 import { generateQuotationPdf } from "@/components/quotation-pdf-download";
 import { QuotationPreview } from "@/components/quotation-preview";
 
+// Define types locally since Prisma types are removed
+interface Company {
+  id: number;
+  userId: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  panNumber?: string | null;
+  vatNumber?: string | null;
+}
 
 const quotationItemSchema = z.object({
   description: z.string().min(1, "Description is required"),

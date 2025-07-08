@@ -1,18 +1,21 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client'
-
-const prismaClientSingleton = () => {
-  return new PrismaClient()
-}
+import mysql from 'mysql2/promise';
 
 declare global {
-  var prisma: undefined | ReturnType<typeof prismaClientSingleton>
+  // Allow global `var` declarations
+  // for storing the connection pool
+  var dbPool: mysql.Pool | undefined;
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton()
-
-export default prisma
+const pool = globalThis.dbPool || mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 if (process.env.NODE_ENV !== 'production') {
-  globalThis.prisma = prisma
+  globalThis.dbPool = pool;
 }
+
+export default pool;

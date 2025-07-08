@@ -12,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { Company } from '@prisma/client';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +46,19 @@ import { createBill, getNextInvoiceNumber } from "@/app/actions/bills";
 import { getCompanyDetails } from "@/app/actions/company";
 import { generateBillPdf } from "@/components/bill-pdf-download";
 import { BillPreview } from "@/components/bill-preview";
+
+// Define types locally since Prisma types are removed
+interface Company {
+  id: number;
+  userId: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  panNumber?: string | null;
+  vatNumber?: string | null;
+}
+
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),

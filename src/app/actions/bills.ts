@@ -1,10 +1,39 @@
 
 'use server';
 
-import prisma from '@/lib/db';
+import db from '@/lib/db';
 import * as z from 'zod';
-import type { BillItem } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import type { RowDataPacket, OkPacket } from 'mysql2';
+
+interface Bill {
+    id: number;
+    userId: number;
+    invoiceNumber: string;
+    clientName: string;
+    clientAddress: string;
+    clientPhone: string;
+    clientPanNumber: string | null;
+    billDate: Date;
+    dueDate: Date;
+    discount: number;
+    status: string; // e.g., 'Pending', 'Paid'
+    createdAt: Date;
+    updatedAt: Date;
+    items?: BillItem[];
+}
+
+interface BillItem {
+    id: number;
+    billId: number;
+    description: string;
+    quantity: number;
+    unit: string;
+    rate: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 
 const billItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -54,51 +83,51 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
         finalDiscount = discountAmount || 0;
     }
 
+    const connection = await db.getConnection();
     try {
-        const newBill = await prisma.$transaction(async (tx) => {
-            const lastBill = await tx.bill.findFirst({
-                orderBy: { id: 'desc' }
-            });
+        await connection.beginTransaction();
 
-            let invoiceNumber: string;
-            if (lastBill && lastBill.invoiceNumber.startsWith('HG')) {
-                const lastNum = parseInt(lastBill.invoiceNumber.substring(2), 10);
-                invoiceNumber = `HG${String(lastNum + 1).padStart(4, '0')}`;
-            } else {
-                invoiceNumber = 'HG0100';
-            }
+        const [lastBillRows] = await connection.query<RowDataPacket[]>(
+            'SELECT `invoiceNumber` FROM `Bill` ORDER BY `id` DESC LIMIT 1'
+        );
 
-            const createdBill = await tx.bill.create({
-                data: {
-                    ...billDetails,
-                    clientPanNumber: panNumber,
-                    invoiceNumber,
-                    discount: finalDiscount,
-                    status: 'Pending',
-                    userId: userId,
-                }
-            });
-
-            const billItemsData = items.map(item => ({
-                ...item,
-                billId: createdBill.id
-            }));
-
-            await tx.billItem.createMany({
-                data: billItemsData
-            });
-
-            return createdBill.id;
-        });
-        
-        if (!newBill) {
-            return { error: "Failed to retrieve the created bill after saving." };
+        let invoiceNumber: string;
+        if (lastBillRows.length > 0 && lastBillRows[0].invoiceNumber.startsWith('HG')) {
+            const lastNum = parseInt(lastBillRows[0].invoiceNumber.substring(2), 10);
+            invoiceNumber = `HG${String(lastNum + 1).padStart(4, '0')}`;
+        } else {
+            invoiceNumber = 'HG0100';
         }
+
+        const [billResult] = await connection.query<OkPacket>(
+            'INSERT INTO `Bill` (`clientName`, `clientAddress`, `clientPhone`, `clientPanNumber`, `billDate`, `dueDate`, `discount`, `status`, `userId`, `invoiceNumber`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [billDetails.clientName, billDetails.clientAddress, billDetails.clientPhone, panNumber, billDetails.billDate, billDetails.dueDate, finalDiscount, 'Pending', userId, invoiceNumber]
+        );
+        const newBillId = billResult.insertId;
+
+        if (!newBillId) {
+            throw new Error("Failed to create bill.");
+        }
+
+        const billItemsData = items.map(item => [
+            newBillId,
+            item.description,
+            item.quantity,
+            item.unit,
+            item.rate
+        ]);
+
+        await connection.query(
+            'INSERT INTO `BillItem` (`billId`, `description`, `quantity`, `unit`, `rate`) VALUES ?',
+            [billItemsData]
+        );
+
+        await connection.commit();
         
         revalidatePath('/dashboard/bills');
         revalidatePath('/dashboard');
 
-        const pdfDataResponse = await getBillDetails(newBill);
+        const pdfDataResponse = await getBillDetails(newBillId);
 
         if (pdfDataResponse.error) {
              return { error: pdfDataResponse.error };
@@ -109,20 +138,22 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
             data: pdfDataResponse.data
         };
     } catch (error) {
+        await connection.rollback();
         console.error("Failed to create bill:", error);
         return { error: "Database Error: Failed to create bill." };
+    } finally {
+        connection.release();
     }
 }
 
 export const getNextInvoiceNumber = async (): Promise<string> => {
     try {
-        const lastBill = await prisma.bill.findFirst({
-            orderBy: { id: 'desc' },
-            select: { invoiceNumber: true }
-        });
+        const [lastBillRows] = await db.query<RowDataPacket[]>(
+            'SELECT `invoiceNumber` FROM `Bill` ORDER BY `id` DESC LIMIT 1'
+        );
 
-        if (lastBill && lastBill.invoiceNumber.startsWith('HG')) {
-            const lastNum = parseInt(lastBill.invoiceNumber.substring(2), 10);
+        if (lastBillRows.length > 0 && lastBillRows[0].invoiceNumber.startsWith('HG')) {
+            const lastNum = parseInt(lastBillRows[0].invoiceNumber.substring(2), 10);
             return `HG${String(lastNum + 1).padStart(4, '0')}`;
         } else {
             return 'HG0100';
@@ -135,29 +166,26 @@ export const getNextInvoiceNumber = async (): Promise<string> => {
 
 export const getAllBills = async () => {
     try {
-        const bills = await prisma.bill.findMany({
-            include: {
-                items: {
-                    select: {
-                        quantity: true,
-                        rate: true,
-                    },
-                },
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
-        });
+        const [bills] = await db.query<RowDataPacket[]>('SELECT * FROM `Bill` ORDER BY `createdAt` DESC');
+        const billsData = bills as Bill[];
 
-        const billsWithTotals = bills.map(bill => {
-            const plainItems = bill.items.map(i => ({
-                quantity: i.quantity.toNumber(),
-                rate: i.rate.toNumber(),
-            }));
-            const discount = bill.discount.toNumber();
-            
-            const subtotal = plainItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
-            const subtotalAfterDiscount = subtotal - discount;
+        if (billsData.length === 0) {
+            return { success: true, data: [] };
+        }
+
+        const billIds = billsData.map(b => b.id);
+        const [items] = await db.query<RowDataPacket[]>('SELECT * FROM `BillItem` WHERE `billId` IN (?)', [billIds]);
+        const itemsData = items as BillItem[];
+
+        const itemsByBillId = itemsData.reduce((acc, item) => {
+            (acc[item.billId] = acc[item.billId] || []).push(item);
+            return acc;
+        }, {} as Record<number, BillItem[]>);
+
+        const billsWithTotals = billsData.map(bill => {
+            const billItems = itemsByBillId[bill.id] || [];
+            const subtotal = billItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
+            const subtotalAfterDiscount = subtotal - bill.discount;
             const vat = subtotalAfterDiscount * 0.13;
             const total = subtotalAfterDiscount + vat;
 
@@ -182,54 +210,37 @@ export const getAllBills = async () => {
 
 export const getBillDetails = async (billId: number): Promise<{ success?: boolean; error?: string; data?: any; }> => {
     try {
-        const bill = await prisma.bill.findUnique({
-            where: { id: billId },
-            include: { items: true },
-        });
-
-        if (!bill) {
+        const [billRows] = await db.query<RowDataPacket[]>('SELECT * FROM `Bill` WHERE `id` = ?', [billId]);
+        
+        if (billRows.length === 0) {
             return { error: "Bill not found." };
         }
-
-        const company = await prisma.company.findUnique({
-            where: { userId: bill.userId },
-        });
-
-        const plainItems = bill.items.map(item => ({
-            ...item,
-            quantity: item.quantity.toNumber(),
-            rate: item.rate.toNumber(),
-            id: item.id,
-            billId: item.billId,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt
-        }));
         
-        const discount = bill.discount.toNumber();
-        
-        const subtotal = plainItems.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
-        const subtotalAfterDiscount = subtotal - discount;
+        const bill = billRows[0] as Bill;
+
+        const [itemRows] = await db.query<RowDataPacket[]>('SELECT * FROM `BillItem` WHERE `billId` = ?', [billId]);
+        bill.items = itemRows as BillItem[];
+
+        const [companyRows] = await db.query<RowDataPacket[]>('SELECT * FROM `Company` WHERE `userId` = ?', [bill.userId]);
+        const company = companyRows[0] || {};
+
+        const subtotal = bill.items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
+        const subtotalAfterDiscount = subtotal - bill.discount;
         const vat = subtotalAfterDiscount * 0.13;
         const total = subtotalAfterDiscount + vat;
 
         const totals = { 
             subtotal, 
-            discount, 
+            discount: bill.discount, 
             subtotalAfterDiscount, 
             vat, 
             total,
             appliedDiscountLabel: 'Discount' 
         };
 
-        const plainBill = {
-            ...bill,
-            discount: discount,
-            items: plainItems,
-        };
-
         return { 
             success: true,
-            data: { bill: plainBill, company: company || {}, totals } 
+            data: { bill, company, totals } 
         };
 
     } catch (error) {
@@ -240,50 +251,32 @@ export const getBillDetails = async (billId: number): Promise<{ success?: boolea
 
 export const getDashboardData = async () => {
     try {
-        const billsFromDb = await prisma.bill.findMany({
-            include: {
-                items: true,
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
-        });
+        const [allBills] = await db.query<RowDataPacket[]>(`
+            SELECT b.*,
+                   (SELECT SUM(bi.quantity * bi.rate) FROM BillItem bi WHERE bi.billId = b.id) as subtotal
+            FROM Bill b
+            ORDER BY b.createdAt DESC
+        `);
+        
+        const bills = allBills as (Bill & { subtotal: number | null })[];
 
         let totalRevenue = 0;
         
-        const plainBills = billsFromDb.map(bill => {
-            const plainItems = bill.items.map(item => ({
-                ...item,
-                quantity: item.quantity.toNumber(),
-                rate: item.rate.toNumber(),
-            }));
-
-            const subtotal = plainItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
-            const discount = bill.discount.toNumber();
-            const subtotalAfterDiscount = subtotal - discount;
+        const processedBills = bills.map(bill => {
+            const subtotal = bill.subtotal || 0;
+            const subtotalAfterDiscount = subtotal - bill.discount;
             const vat = subtotalAfterDiscount * 0.13;
             const total = subtotalAfterDiscount + vat;
             totalRevenue += total;
 
-            return {
-                ...bill,
-                id: bill.id,
-                invoiceNumber: bill.invoiceNumber,
-                clientName: bill.clientName,
-                clientPhone: bill.clientPhone,
-                billDate: bill.billDate,
-                status: bill.status,
-                items: plainItems,
-                discount: discount,
-                amount: total,
-            };
+            return { ...bill, amount: total };
         });
 
-        const totalBills = plainBills.length;
-        const paidBills = plainBills.filter(b => b.status === 'Paid').length;
+        const totalBills = processedBills.length;
+        const paidBills = processedBills.filter(b => b.status === 'Paid').length;
         const dueBills = totalBills - paidBills;
 
-        const recentBills = plainBills.slice(0, 5);
+        const recentBills = processedBills.slice(0, 5);
         
         const stats = {
             totalRevenue,
@@ -313,11 +306,8 @@ export const updateBillStatus = async (billId: number, status: string): Promise<
     }
 
     try {
-        await prisma.bill.update({
-            where: { id: billId },
-            data: { status: status }
-        });
-
+        await db.query('UPDATE `Bill` SET `status` = ? WHERE `id` = ?', [status, billId]);
+        
         revalidatePath(`/dashboard/bills/${billId}`);
         revalidatePath('/dashboard/bills');
         revalidatePath('/dashboard');
@@ -330,22 +320,22 @@ export const updateBillStatus = async (billId: number, status: string): Promise<
 };
 
 export const deleteBill = async (billId: number): Promise<{ success?: string; error?: string; }> => {
+    const connection = await db.getConnection();
     try {
-        await prisma.$transaction(async (tx) => {
-            await tx.billItem.deleteMany({
-                where: { billId: billId }
-            });
-            await tx.bill.delete({
-                where: { id: billId }
-            });
-        });
+        await connection.beginTransaction();
+        await connection.query('DELETE FROM `BillItem` WHERE `billId` = ?', [billId]);
+        await connection.query('DELETE FROM `Bill` WHERE `id` = ?', [billId]);
+        await connection.commit();
 
         revalidatePath('/dashboard/bills');
         revalidatePath('/dashboard');
         
         return { success: "Bill deleted successfully." };
     } catch (error) {
+        await connection.rollback();
         console.error(`Failed to delete bill ${billId}:`, error);
         return { error: "Database Error: Failed to delete bill." };
+    } finally {
+        connection.release();
     }
 };
