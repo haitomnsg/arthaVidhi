@@ -1,9 +1,9 @@
 
 "use client";
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Download, Loader2, Save, Trash2, ArrowLeft } from 'lucide-react';
+import { Download, Loader2, Save, Trash2, ArrowLeft, Pencil } from 'lucide-react';
 
 import { getBillDetails, updateBillStatus, deleteBill } from '@/app/actions/bills';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import Link from 'next/link';
+import { EditBillForm } from '@/components/edit-bill-form';
 
 type BillDataType = {
   bill: any;
@@ -50,14 +58,14 @@ export default function ViewBillPage() {
   const [isPending, startTransition] = useTransition();
   const [isDownloading, setIsDownloading] = useState(false);
   const [currentStatus, setCurrentStatus] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchBillData = useCallback(() => {
     if (isNaN(billId)) {
       toast({ title: "Error", description: "Invalid Bill ID.", variant: "destructive" });
       router.push('/dashboard/bills');
       return;
     }
-    
     setIsLoading(true);
     getBillDetails(billId).then(res => {
       if (res.success && res.data) {
@@ -67,9 +75,14 @@ export default function ViewBillPage() {
         toast({ title: "Error", description: res.error || "Failed to fetch bill details.", variant: "destructive" });
         router.push('/dashboard/bills');
       }
+    }).finally(() => {
       setIsLoading(false);
     });
   }, [billId, router, toast]);
+
+  useEffect(() => {
+    fetchBillData();
+  }, [fetchBillData]);
 
   const handleDownload = () => {
     if (!billData) return;
@@ -88,12 +101,7 @@ export default function ViewBillPage() {
       updateBillStatus(billId, currentStatus).then(res => {
         if (res.success) {
           toast({ title: "Success", description: res.success });
-          // Re-fetch data to reflect updated status
-          getBillDetails(billId).then(refreshedRes => {
-            if (refreshedRes.success) {
-              setBillData(refreshedRes.data);
-            }
-          });
+          fetchBillData(); // Re-fetch data
         } else {
           toast({ title: "Error", description: res.error, variant: "destructive" });
         }
@@ -121,97 +129,122 @@ export default function ViewBillPage() {
   const { bill, company, totals } = billData;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Invoice Details</CardTitle>
-                <CardDescription>Viewing invoice #{bill.invoiceNumber}</CardDescription>
-              </div>
-              <Button variant="outline" asChild>
-                <Link href="/dashboard/bills">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back to All Bills
-                </Link>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <BillPreview
-              company={company}
-              bill={bill}
-              subtotal={totals.subtotal}
-              discount={totals.discount}
-              subtotalAfterDiscount={totals.subtotalAfterDiscount}
-              vat={totals.vat}
-              total={totals.total}
-              appliedDiscountLabel={totals.appliedDiscountLabel}
-              invoiceNumber={bill.invoiceNumber}
-            />
-          </CardContent>
-        </Card>
-      </div>
+    <>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice #{bill.invoiceNumber}</DialogTitle>
+            <DialogDescription>
+              Make changes to the bill details and items below. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <EditBillForm
+            billData={billData}
+            onSuccess={() => {
+              setIsEditDialogOpen(false);
+              fetchBillData();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
-      <div className="lg:col-span-1">
-        <Card className="sticky top-20">
-          <CardHeader>
-            <CardTitle>Actions</CardTitle>
-            <CardDescription>Manage this invoice.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Bill Status</label>
-              <div className="flex items-center gap-2">
-                <Select value={currentStatus} onValueChange={setCurrentStatus} disabled={isPending}>
-                  <SelectTrigger className="flex-grow">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Paid">Paid</SelectItem>
-                    <SelectItem value="Overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleUpdateStatus} disabled={isPending || currentStatus === bill.status}>
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Invoice Details</CardTitle>
+                  <CardDescription>Viewing invoice #{bill.invoiceNumber}</CardDescription>
+                </div>
+                <Button variant="outline" asChild>
+                  <Link href="/dashboard/bills">
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back to All Bills
+                  </Link>
                 </Button>
               </div>
-            </div>
-            
-            <Button onClick={handleDownload} disabled={isDownloading} className="w-full">
-              {isDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              Download PDF
-            </Button>
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full" disabled={isPending}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Bill
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete this bill
-                    and all of its associated data from our servers.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} disabled={isPending}>
-                    {isPending ? 'Deleting...' : 'Continue'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <BillPreview
+                company={company}
+                bill={bill}
+                subtotal={totals.subtotal}
+                discount={totals.discount}
+                subtotalAfterDiscount={totals.subtotalAfterDiscount}
+                vat={totals.vat}
+                total={totals.total}
+                appliedDiscountLabel={totals.appliedDiscountLabel}
+                invoiceNumber={bill.invoiceNumber}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-1">
+          <Card className="sticky top-20">
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+              <CardDescription>Manage this invoice.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Bill Status</label>
+                <div className="flex items-center gap-2">
+                  <Select value={currentStatus} onValueChange={setCurrentStatus} disabled={isPending}>
+                    <SelectTrigger className="flex-grow">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Paid">Paid</SelectItem>
+                      <SelectItem value="Overdue">Overdue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={handleUpdateStatus} disabled={isPending || currentStatus === bill.status}>
+                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              <Button onClick={() => setIsEditDialogOpen(true)} className="w-full">
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Bill
+              </Button>
+
+              <Button onClick={handleDownload} disabled={isDownloading} className="w-full">
+                {isDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Download PDF
+              </Button>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full" disabled={isPending}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Bill
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete this bill
+                      and all of its associated data from our servers.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} disabled={isPending}>
+                      {isPending ? 'Deleting...' : 'Continue'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -271,6 +304,7 @@ function ViewBillSkeleton() {
                 <Skeleton className="h-5 w-40" />
             </CardHeader>
             <CardContent className="space-y-4">
+                <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />

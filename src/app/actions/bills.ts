@@ -146,6 +146,86 @@ export const createBill = async (values: BillFormValues): Promise<{ success?: st
     }
 }
 
+const updateBillFormSchema = billFormSchema.extend({
+  billId: z.number(),
+});
+
+export type UpdateBillFormValues = z.infer<typeof updateBillFormSchema>;
+
+export const updateBill = async (values: UpdateBillFormValues): Promise<{ success?: string; error?: string; }> => {
+    const validatedFields = updateBillFormSchema.safeParse(values);
+
+    if (!validatedFields.success) {
+        return { error: "Invalid fields!" };
+    }
+
+    const {
+        billId,
+        items,
+        discountType,
+        discountPercentage,
+        discountAmount,
+        panNumber,
+        ...billDetails
+    } = validatedFields.data;
+
+    const userId = 1;
+
+    const subtotalForDiscount = items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
+    let finalDiscount = 0;
+    if (discountType === 'percentage') {
+        finalDiscount = subtotalForDiscount * ((discountPercentage || 0) / 100);
+    } else {
+        finalDiscount = discountAmount || 0;
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [updateResult] = await connection.query<OkPacket>(
+            'UPDATE `Bill` SET `clientName` = ?, `clientAddress` = ?, `clientPhone` = ?, `clientPanNumber` = ?, `billDate` = ?, `dueDate` = ?, `discount` = ? WHERE `id` = ? AND `userId` = ?',
+            [billDetails.clientName, billDetails.clientAddress, billDetails.clientPhone, panNumber, billDetails.billDate, billDetails.dueDate, finalDiscount, billId, userId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            throw new Error("Bill not found or user not authorized to update.");
+        }
+        
+        await connection.query('DELETE FROM `BillItem` WHERE `billId` = ?', [billId]);
+
+        if (items.length > 0) {
+            const billItemsData = items.map(item => [
+                billId,
+                item.description,
+                item.quantity,
+                item.unit,
+                item.rate
+            ]);
+            await connection.query(
+                'INSERT INTO `BillItem` (`billId`, `description`, `quantity`, `unit`, `rate`) VALUES ?',
+                [billItemsData]
+            );
+        }
+
+        await connection.commit();
+        
+        revalidatePath(`/dashboard/bills/${billId}`);
+        revalidatePath('/dashboard/bills');
+        revalidatePath('/dashboard');
+        
+        return { success: "Bill updated successfully!" };
+
+    } catch (error) {
+        await connection.rollback();
+        console.error("Failed to update bill:", error);
+        return { error: "Database Error: Failed to update bill." };
+    } finally {
+        connection.release();
+    }
+}
+
+
 export const getNextInvoiceNumber = async (): Promise<string> => {
     try {
         const [lastBillRows] = await db.query<RowDataPacket[]>(
