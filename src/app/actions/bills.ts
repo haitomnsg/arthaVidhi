@@ -265,7 +265,8 @@ export const getAllBills = async () => {
         const billsWithTotals = billsData.map(bill => {
             const billItems = itemsByBillId[bill.id] || [];
             const subtotal = billItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
-            const subtotalAfterDiscount = subtotal - bill.discount;
+            const discount = Number(bill.discount) || 0;
+            const subtotalAfterDiscount = subtotal - discount;
             const vat = subtotalAfterDiscount * 0.13;
             const total = subtotalAfterDiscount + vat;
 
@@ -299,19 +300,24 @@ export const getBillDetails = async (billId: number): Promise<{ success?: boolea
         const bill = billRows[0] as Bill;
 
         const [itemRows] = await db.query<RowDataPacket[]>('SELECT * FROM `BillItem` WHERE `billId` = ?', [billId]);
-        bill.items = itemRows as BillItem[];
+        bill.items = (itemRows as BillItem[]).map(item => ({
+            ...item,
+            rate: Number(item.rate) || 0,
+            quantity: Number(item.quantity) || 0,
+        }));
 
         const [companyRows] = await db.query<RowDataPacket[]>('SELECT * FROM `Company` WHERE `userId` = ?', [bill.userId]);
         const company = companyRows[0] || {};
 
         const subtotal = bill.items.reduce((acc, item) => acc + (item.quantity * item.rate), 0);
-        const subtotalAfterDiscount = subtotal - bill.discount;
+        const discount = Number(bill.discount) || 0;
+        const subtotalAfterDiscount = subtotal - discount;
         const vat = subtotalAfterDiscount * 0.13;
         const total = subtotalAfterDiscount + vat;
 
         const totals = { 
             subtotal, 
-            discount: bill.discount, 
+            discount: discount, 
             subtotalAfterDiscount, 
             vat, 
             total,
@@ -344,7 +350,8 @@ export const getDashboardData = async () => {
         
         const processedBills = bills.map(bill => {
             const subtotal = bill.subtotal || 0;
-            const subtotalAfterDiscount = subtotal - bill.discount;
+            const discount = Number(bill.discount) || 0;
+            const subtotalAfterDiscount = subtotal - discount;
             const vat = subtotalAfterDiscount * 0.13;
             const total = subtotalAfterDiscount + vat;
             totalRevenue += total;
