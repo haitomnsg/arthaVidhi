@@ -33,7 +33,7 @@ interface BillPdfData {
             description: string;
             quantity: number;
             unit: string;
-            rate: number;
+            rate: number | string; // Can be string from DB
         }[];
     };
     company: Partial<Company>;
@@ -150,13 +150,14 @@ export const generateBillPdf = (data: BillPdfData) => {
     doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     
     bill.items.forEach(item => {
-        const itemTotal = item.quantity * item.rate;
+        const rateAsNumber = Number(item.rate);
+        const itemTotal = item.quantity * rateAsNumber;
         doc.line(margin, y, pageWidth - margin, y);
         y += 6;
         doc.text(item.description, margin + 3, y, { maxWidth: 90 });
         doc.text(item.quantity.toString(), 115, y, { align: 'center' });
         doc.text(item.unit, 135, y, { align: 'center' });
-        doc.text(`Rs. ${item.rate.toFixed(2)}`, 160, y, { align: 'right' });
+        doc.text(`Rs. ${rateAsNumber.toFixed(2)}`, 160, y, { align: 'right' });
         doc.text(`Rs. ${itemTotal.toFixed(2)}`, 195, y, { align: 'right' });
         y += 2;
     });
