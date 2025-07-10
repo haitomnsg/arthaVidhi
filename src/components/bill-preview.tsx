@@ -22,7 +22,7 @@ interface BillPreviewProps {
     company: Partial<Company>;
     bill: Partial<BillFormValues> | any;
     subtotal: number;
-    discount: number;
+    discount: number | string;
     subtotalAfterDiscount: number;
     vat: number;
     total: number;
@@ -33,6 +33,7 @@ interface BillPreviewProps {
 export function BillPreview({ company, bill, subtotal, discount, subtotalAfterDiscount, vat, total, appliedDiscountLabel, invoiceNumber }: BillPreviewProps) {
   const formattedDate = bill.billDate ? format(new Date(bill.billDate), "PPP") : 'N/A';
   const formattedDueDate = bill.dueDate ? format(new Date(bill.dueDate), "PPP") : formattedDate;
+  const numericDiscount = Number(discount) || 0;
   
   return (
     <div className="bg-card text-card-foreground p-8 rounded-lg border print:border-none print:shadow-none">
@@ -102,7 +103,7 @@ export function BillPreview({ company, bill, subtotal, discount, subtotalAfterDi
        <div className="flex justify-end mt-8">
         <div className="w-full max-w-xs space-y-2">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">{appliedDiscountLabel}</span><span>- Rs. {discount.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{appliedDiscountLabel}</span><span>- Rs. {numericDiscount.toFixed(2)}</span></div>
             <Separator />
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal after Discount</span><span>Rs. {subtotalAfterDiscount.toFixed(2)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">VAT (13%)</span><span>Rs. {vat.toFixed(2)}</span></div>
